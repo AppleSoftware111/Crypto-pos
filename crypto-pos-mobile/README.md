@@ -48,24 +48,13 @@ A professional React Native mobile application for the Crypto POS system. Accept
 
 3. **Configure API Base URL:**
    
-   Edit `src/utils/config.js` and update `API_BASE_URL`:
+   Edit `crypto-pos-mobile/.env` and set `EXPO_PUBLIC_API_BASE_URL`:
    
-   ```javascript
-   // For Android Emulator:
-   export const API_BASE_URL = 'http://10.0.2.2:4000';
-   
-   // For Physical Device (replace with your computer's IP):
-   export const API_BASE_URL = 'http://192.168.1.100:4000';
-   
-   // For Production:
-   export const API_BASE_URL = 'https://your-domain.com';
-   ```
+   - **Android Emulator:** `EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:4000`
+   - **Physical device:** Use your PC's LAN IP, e.g. `EXPO_PUBLIC_API_BASE_URL=http://192.168.1.100:4000` (find IP: `ipconfig` on Windows)
+   - Phone and PC must be on the same Wi‑Fi when using a physical device.
 
-   **Important Notes:**
-   - Android Emulator: Use `10.0.2.2` instead of `localhost` or `127.0.0.1`
-   - Physical Device: Use your computer's local network IP address
-   - Find your IP: Windows `ipconfig`, Linux/Mac `ifconfig`
-   - Ensure your backend server is running and accessible
+   **Required:** Start the backend before opening the app: from project root run `node server.js` (server runs on port 4000).
 
 ## Running the App
 
@@ -85,6 +74,11 @@ A professional React Native mobile application for the Crypto POS system. Accept
 
 3. **Run on iOS (macOS only):**
    - Press `i` in the terminal
+
+**Troubleshooting connection errors**
+
+- **"Cannot connect to Metro"** – Start the app with `npm start` in `crypto-pos-mobile`. For a physical device, ensure it’s on the same Wi‑Fi as your PC and run `adb devices`.
+- **"No response from server" / "timeout exceeded"** – Start the backend: in project root run `node server.js` so it listens on port 4000. On a **physical device**, set `EXPO_PUBLIC_API_BASE_URL` in `.env` to your PC’s IP (e.g. `http://192.168.1.100:4000`), not `10.0.2.2`.
 
 ### Using React Native CLI
 

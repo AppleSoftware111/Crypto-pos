@@ -202,6 +202,7 @@ router.get('/payments', requireAuth, (req, res) => {
         const filters = {
             status: req.query.status,
             coinId: req.query.coinId,
+            method: req.query.method,
             startDate: req.query.startDate,
             endDate: req.query.endDate
         };
@@ -281,6 +282,26 @@ router.get('/logs', requireAuth, (req, res) => {
     } catch (error) {
         console.error('Error fetching logs:', error);
         res.status(500).json({ error: 'Failed to fetch logs' });
+    }
+});
+
+/**
+ * Sync default POS company/cashier passwords to current .env (COMPANY_PASSWORD, CASHIER_PASSWORD).
+ * Call this when POS login returns "Invalid company password" after changing .env.
+ * Requires admin auth (session or X-API-Key).
+ */
+router.post('/sync-default-credentials', requireAuth, (req, res) => {
+    try {
+        const db = getDatabase();
+        const result = db.syncDefaultCompanyCredentialsFromEnv();
+        res.json({
+            success: true,
+            message: 'Default company and cashier passwords updated to match .env.',
+            ...result
+        });
+    } catch (error) {
+        console.error('Sync default credentials error:', error);
+        res.status(500).json({ error: 'Failed to sync credentials' });
     }
 });
 

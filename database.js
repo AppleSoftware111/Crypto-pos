@@ -50,6 +50,8 @@ class DatabaseManager {
                 admin_users: [],
                 payments: [],
                 admin_logs: [],
+                companies: [],
+                cashiers: [],
                 _meta: {
                     version: '1.0.0',
                     created_at: new Date().toISOString()
@@ -62,10 +64,17 @@ class DatabaseManager {
         if (!this.data.admin_users) this.data.admin_users = [];
         if (!this.data.payments) this.data.payments = [];
         if (!this.data.admin_logs) this.data.admin_logs = [];
+        if (!this.data.companies) this.data.companies = [];
+        if (!this.data.cashiers) this.data.cashiers = [];
 
         // Initialize default admin if no users exist
         if (this.data.admin_users.length === 0) {
             this.initDefaultAdmin();
+        }
+
+        // Initialize default company and cashier if none exist
+        if (this.data.companies.length === 0) {
+            this.initDefaultCompany();
         }
 
         // Migrate coins if empty
@@ -85,7 +94,9 @@ class DatabaseManager {
                 coins: [],
                 admin_users: [],
                 payments: [],
-                admin_logs: []
+                admin_logs: [],
+                companies: [],
+                cashiers: []
             };
         }
         return this.data;
@@ -254,7 +265,14 @@ class DatabaseManager {
 
     getCoinByMethodCode(methodCode) {
         const data = this.readData();
-        return data.coins.find(coin => coin.method_code === methodCode && coin.enabled === 1) || null;
+        if (!methodCode) {
+            return null;
+        }
+
+        const normalizedMethodCode = String(methodCode).toLowerCase();
+        return data.coins.find(
+            coin => String(coin.method_code).toLowerCase() === normalizedMethodCode && coin.enabled === 1
+        ) || null;
     }
 
     createCoin(coinData) {
@@ -396,6 +414,11 @@ class DatabaseManager {
             payments = payments.filter(p => p.coin_id === filters.coinId);
         }
 
+        if (filters.method) {
+            const normalizedMethod = String(filters.method).toLowerCase();
+            payments = payments.filter(p => String(p.method || '').toLowerCase() === normalizedMethod);
+        }
+
         if (filters.startDate) {
             payments = payments.filter(p => p.created_at >= filters.startDate);
         }
@@ -410,10 +433,24 @@ class DatabaseManager {
         // Add coin information
         payments = payments.map(payment => {
             const coin = data.coins.find(c => c.id === payment.coin_id);
+            const methodCode = String(payment.method || '').toLowerCase();
+            const methodLabels = {
+                visa: { name: 'Visa', symbol: 'VISA' },
+                mastercard: { name: 'Mastercard', symbol: 'MC' },
+                unionpay: { name: 'UnionPay', symbol: 'UP' },
+                'qr-code': { name: 'QR Code', symbol: 'QR' },
+                gcash: { name: 'GCash', symbol: 'GCASH' },
+                gpay: { name: 'Google Pay', symbol: 'GPAY' },
+                'apple-pay': { name: 'Apple Pay', symbol: 'APAY' },
+                'wechat-pay': { name: 'WeChat Pay', symbol: 'WECHAT' },
+                alipay: { name: 'Alipay', symbol: 'ALIPAY' },
+            };
+            const nonCrypto = methodLabels[methodCode] || null;
+
             return {
                 ...payment,
-                coin_name: coin ? coin.name : null,
-                symbol: coin ? coin.symbol : null
+                coin_name: coin ? coin.name : (nonCrypto ? nonCrypto.name : null),
+                symbol: coin ? coin.symbol : (nonCrypto ? nonCrypto.symbol : null),
             };
         });
 
@@ -513,6 +550,144 @@ class DatabaseManager {
         });
 
         return logs.slice(0, limit);
+    }
+
+    // Initialize default company and cashier
+    // Use env vars in production: COMPANY_PASSWORD, CASHIER_PASSWORD
+    initDefaultCompany() {
+        const data = this.readData();
+        const isProduction = process.env.NODE_ENV === 'production';
+        const defaultCompanyPassword = process.env.COMPANY_PASSWORD || 'company123';
+        const defaultCashierPassword = process.env.CASHIER_PASSWORD || 'cashier123';
+
+        if (isProduction && (!process.env.COMPANY_PASSWORD || !process.env.CASHIER_PASSWORD)) {
+            console.warn('⚠️  Production: Set COMPANY_PASSWORD and CASHIER_PASSWORD in .env. Using defaults is insecure.');
+        }
+
+        const companyPasswordHash = bcrypt.hashSync(defaultCompanyPassword, 10);
+        const company = {
+            id: 'company_1',
+            name: process.env.COMPANY_NAME || 'Default Company',
+            password_hash: companyPasswordHash,
+            status: 'active',
+            created_at: new Date().toISOString(),
+            last_login: null
+        };
+
+        data.companies.push(company);
+
+        const cashierPasswordHash = bcrypt.hashSync(defaultCashierPassword, 10);
+        const cashier = {
+            id: 'cashier_1',
+            company_id: company.id,
+            name: process.env.CASHIER_NAME || 'Cashier 1',
+            password_hash: cashierPasswordHash,
+            status: 'active',
+            created_at: new Date().toISOString(),
+            last_login: null
+        };
+
+        data.cashiers.push(cashier);
+        this.writeData(data);
+        if (!isProduction) {
+            console.log('Default company/cashier created. Change credentials in production (see .env.example).');
+        }
+    }
+
+    /**
+     * Sync default company and cashier passwords to current .env values.
+     * Use when .env COMPANY_PASSWORD/CASHIER_PASSWORD were changed and POS login fails.
+     * Requires admin auth when called via API.
+     */
+    syncDefaultCompanyCredentialsFromEnv() {
+        const data = this.readData();
+        const companyPassword = process.env.COMPANY_PASSWORD || 'company123';
+        const cashierPassword = process.env.CASHIER_PASSWORD || 'cashier123';
+        let companyUpdated = false;
+        let cashierUpdated = false;
+
+        const company = data.companies.find(c => c.id === 'company_1');
+        if (company) {
+            company.password_hash = bcrypt.hashSync(companyPassword, 10);
+            companyUpdated = true;
+        }
+
+        const cashier = data.cashiers.find(c => c.id === 'cashier_1');
+        if (cashier) {
+            cashier.password_hash = bcrypt.hashSync(cashierPassword, 10);
+            cashierUpdated = true;
+        }
+
+        if (companyUpdated || cashierUpdated) {
+            this.writeData(data);
+        }
+        return { companyUpdated, cashierUpdated };
+    }
+
+    // Company authentication methods
+    authenticateCompany(password) {
+        const data = this.readData();
+        const company = data.companies.find(c => c.status === 'active');
+
+        if (!company) {
+            return null;
+        }
+
+        if (bcrypt.compareSync(password, company.password_hash)) {
+            // Update last login
+            company.last_login = new Date().toISOString();
+            this.writeData(data);
+
+            return {
+                id: company.id,
+                name: company.name,
+                status: company.status
+            };
+        }
+
+        return null;
+    }
+
+    getCompanyById(companyId) {
+        const data = this.readData();
+        return data.companies.find(c => c.id === companyId) || null;
+    }
+
+    // Cashier methods
+    getCashiersByCompany(companyId) {
+        const data = this.readData();
+        return data.cashiers.filter(c => c.company_id === companyId);
+    }
+
+    getCashierById(cashierId) {
+        const data = this.readData();
+        return data.cashiers.find(c => c.id === cashierId) || null;
+    }
+
+    authenticateCashier(companyId, cashierId, password) {
+        const data = this.readData();
+        const cashier = data.cashiers.find(
+            c => c.id === cashierId && c.company_id === companyId && c.status === 'active'
+        );
+
+        if (!cashier) {
+            return null;
+        }
+
+        if (bcrypt.compareSync(password, cashier.password_hash)) {
+            // Update last login
+            cashier.last_login = new Date().toISOString();
+            this.writeData(data);
+
+            return {
+                id: cashier.id,
+                company_id: cashier.company_id,
+                name: cashier.name,
+                status: cashier.status
+            };
+        }
+
+        return null;
     }
 
     close() {

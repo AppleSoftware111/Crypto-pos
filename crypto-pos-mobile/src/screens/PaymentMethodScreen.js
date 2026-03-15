@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,22 +10,76 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useCoins } from '../hooks/useCoins';
-import CoinCard from '../components/CoinCard';
-import { COLORS, FONT_SIZES, API_BASE_URL } from '../utils/config';
+import PaymentMethodCard from '../components/PaymentMethodCard';
+import { COLORS, FONT_SIZES } from '../utils/config';
+import { getApiBaseUrl } from '../utils/dashboardConfig';
+import { mergePaymentMethods, PAYMENT_METHOD_TYPES } from '../utils/paymentMethods';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * PaymentMethodScreen
- * Displays list of available payment methods (coins)
+ * Displays grid of available payment methods (Currencies screen)
+ * Matches OMARA Pay POS interface from video
  */
 const PaymentMethodScreen = ({ navigation }) => {
   const { coins, loading, error, refetch } = useCoins();
+  const { logout } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const apiBaseUrl = getApiBaseUrl();
 
-  const handleCoinSelect = (coin) => {
-    navigation.navigate('AmountInput', { coin });
+  // Merge server coins with static payment methods
+  const paymentMethods = mergePaymentMethods(coins);
+
+  const getMethodCode = (method) =>
+    method?.methodCode || method?.method_code || method?.id || null;
+
+  const handleMethodSelect = (method) => {
+    const normalizedMethod = {
+      ...method,
+      methodCode: getMethodCode(method),
+    };
+
+    if (method.type === PAYMENT_METHOD_TYPES.CRYPTO) {
+      if (!normalizedMethod.methodCode) {
+        Alert.alert('Error', 'Invalid cryptocurrency configuration.');
+        return;
+      }
+      // Navigate to crypto flow
+      navigation.navigate('CryptoRate', { method: normalizedMethod });
+    } else if (method.type === PAYMENT_METHOD_TYPES.CARD) {
+      // Navigate to card flow
+      navigation.navigate('CardConfirmation', { method: normalizedMethod });
+    } else if (method.type === PAYMENT_METHOD_TYPES.QR_WALLET) {
+      // Navigate to QR wallet flow
+      navigation.navigate('QRWallet', { method: normalizedMethod });
+    } else {
+      // Fallback to amount input (for backward compatibility)
+      navigation.navigate('AmountInput', { coin: normalizedMethod });
+    }
   };
 
-  const handleRetry = () => {
-    refetch();
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            // Navigation will automatically switch to auth screens
+          },
+        },
+      ]
+    );
   };
 
   React.useEffect(() => {
@@ -35,13 +89,13 @@ const PaymentMethodScreen = ({ navigation }) => {
         error || 'Failed to load payment methods. Please check your server connection.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Retry', onPress: handleRetry },
+          { text: 'Retry', onPress: refetch },
         ]
       );
     }
   }, [error]);
 
-  if (loading && coins.length === 0) {
+  if (loading && paymentMethods.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -50,11 +104,10 @@ const PaymentMethodScreen = ({ navigation }) => {
     );
   }
 
-  if (error && coins.length === 0) {
-    // Clean up error message - remove "I'm a teapot" or other unusual messages
+  if (error && paymentMethods.length === 0) {
     let displayError = error;
     if (error.includes('teapot') || error.includes('418')) {
-      displayError = 'Cannot connect to server. Please check:\n\n1. Backend server is running on port 4000\n2. API_BASE_URL is correct\n3. Emulator can reach the server';
+      displayError = 'Cannot connect to server. Please check:\n\n1. Backend server is running on port 4000\n2. API_BASE_URL is correct\n3. Device can reach the server';
     }
     
     return (
@@ -64,11 +117,6 @@ const PaymentMethodScreen = ({ navigation }) => {
         <Text style={styles.errorText}>
           {displayError || 'Unable to connect to server. Please check your configuration.'}
         </Text>
-        <Text style={styles.configHint}>
-          Make sure your server is running and API_BASE_URL is correct in src/utils/config.js{'\n'}
-          For emulator: Use http://10.0.2.2:4000{'\n'}
-          For physical device: Use your computer's IP address
-        </Text>
         <TouchableOpacity style={styles.retryButton} onPress={refetch}>
           <Text style={styles.retryButtonText}>Retry Connection</Text>
         </TouchableOpacity>
@@ -76,28 +124,52 @@ const PaymentMethodScreen = ({ navigation }) => {
     );
   }
 
+  // Render grid item
+  const renderItem = ({ item, index }) => {
+    return (
+      <View style={styles.gridItem}>
+        <PaymentMethodCard
+          method={item}
+          onPress={() => handleMethodSelect(item)}
+          baseUrl={apiBaseUrl}
+        />
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Select Payment Method</Text>
-        <Text style={styles.subtitle}>Choose a cryptocurrency to accept payment</Text>
+        <View>
+          <Text style={styles.title}>Currencies</Text>
+          <Text style={styles.subtitle}>Select payment method</Text>
+        </View>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => navigation.navigate('TransactionHistory')}
+          >
+            <Text style={styles.historyButtonText}>History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
+      {/* Payment Methods Grid */}
       <FlatList
-        data={coins}
-        renderItem={({ item }) => (
-          <CoinCard
-            coin={item}
-            onPress={() => handleCoinSelect(item)}
-            baseUrl={API_BASE_URL}
-          />
-        )}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        data={paymentMethods}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id || item.methodCode || `method-${item.name}`}
+        numColumns={3}
+        contentContainerStyle={styles.gridContainer}
+        columnWrapperStyle={styles.gridRow}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
-            onRefresh={refetch}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
             tintColor={COLORS.primary}
           />
         }
@@ -105,7 +177,7 @@ const PaymentMethodScreen = ({ navigation }) => {
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No payment methods available</Text>
             <Text style={styles.emptySubtext}>
-              Please configure coins in the admin panel
+              Please configure payment methods in the admin panel
             </Text>
           </View>
         }
@@ -119,7 +191,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    backgroundColor: COLORS.background,
+  },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 20,
     paddingTop: 16,
     backgroundColor: COLORS.surface,
@@ -136,15 +218,44 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.medium,
     color: COLORS.textSecondary,
   },
-  listContainer: {
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  historyButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary + '20',
+  },
+  historyButtonText: {
+    color: COLORS.primary,
+    fontSize: FONT_SIZES.medium,
+    fontWeight: '600',
+  },
+  logoutButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.error + '20',
+  },
+  logoutButtonText: {
+    color: COLORS.error,
+    fontSize: FONT_SIZES.medium,
+    fontWeight: '600',
+  },
+  gridContainer: {
     padding: 16,
   },
-  centerContainer: {
+  gridRow: {
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  gridItem: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-    backgroundColor: COLORS.background,
+    marginHorizontal: 4,
+    maxWidth: '32%',
   },
   loadingText: {
     marginTop: 16,
@@ -167,26 +278,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  configHint: {
-    fontSize: FONT_SIZES.small,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  emptyContainer: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: FONT_SIZES.large,
-    color: COLORS.textSecondary,
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: FONT_SIZES.medium,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
   retryButton: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 24,
@@ -199,7 +290,20 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.medium,
     fontWeight: '600',
   },
+  emptyContainer: {
+    padding: 48,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: FONT_SIZES.large,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: FONT_SIZES.medium,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
 });
 
 export default PaymentMethodScreen;
-

@@ -3,21 +3,53 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const session = require('express-session');
+const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('./database');
 const adminRoutes = require('./routes/admin');
 const { requireAuthHTML } = require('./middleware/auth');
+require('dotenv').config();
 
 const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
+
+// CORS: allow Omarapay dashboard and local dev
+const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+const corsOptions = {
+    origin: corsOrigins.length > 0
+        ? (origin, callback) => {
+            if (!origin) return callback(null, true);
+            if (corsOrigins.includes('*') || corsOrigins.includes(origin)) return callback(null, true);
+            callback(null, false);
+        }
+        : true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Token', 'X-Cashier-Token', 'X-Idempotency-Key', 'X-API-Key'],
+};
+app.use(cors(corsOptions));
+
+// Security headers
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    next();
+});
+
+// Rate limiting: 200 requests per 15 min per IP for API
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 200,
+    message: { error: 'Too many requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
 
 // Initialize database
 const db = getDatabase();
-
-// Middleware
-app.use(cors({
-    origin: true,
-    credentials: true
-}));
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -35,6 +67,100 @@ app.use(session({
 
 // Store active payment requests (in-memory for quick access, also stored in DB)
 const activePayments = new Map();
+const idempotencyStore = new Map();
+const paymentEvents = new Map();
+
+function isValidAmount(value) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return false;
+    if (amount <= 0) return false;
+    if (amount > 1000000) return false; // basic guardrail for bad payloads
+    return true;
+}
+
+function getIdempotencyKey(req) {
+    const headerKey = req.headers['x-idempotency-key'];
+    const bodyKey = req.body?.idempotencyKey;
+    const key = headerKey || bodyKey;
+    return key ? String(key) : null;
+}
+
+function tryGetIdempotentResponse(req, res) {
+    const key = getIdempotencyKey(req);
+    if (!key) return null;
+    const existing = idempotencyStore.get(key);
+    if (!existing) return null;
+    return res.status(existing.statusCode).json(existing.payload);
+}
+
+function storeIdempotentResponse(req, statusCode, payload) {
+    const key = getIdempotencyKey(req);
+    if (!key) return;
+    idempotencyStore.set(key, {
+        statusCode,
+        payload,
+        createdAt: Date.now(),
+    });
+}
+
+function recordPaymentEvent(paymentId, eventType, details = {}) {
+    const event = {
+        id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        paymentId,
+        type: eventType,
+        details,
+        createdAt: new Date().toISOString(),
+    };
+    if (!paymentEvents.has(paymentId)) {
+        paymentEvents.set(paymentId, []);
+    }
+    paymentEvents.get(paymentId).push(event);
+    return event;
+}
+
+// Card payment helpers
+function sanitizeDigits(value) {
+    return String(value || '').replace(/\D/g, '');
+}
+
+function isValidCardNumber(cardNumber) {
+    const digits = sanitizeDigits(cardNumber);
+    if (digits.length < 12 || digits.length > 19) return false;
+
+    // Luhn check
+    let sum = 0;
+    let shouldDouble = false;
+    for (let i = digits.length - 1; i >= 0; i -= 1) {
+        let digit = parseInt(digits.charAt(i), 10);
+        if (shouldDouble) {
+            digit *= 2;
+            if (digit > 9) digit -= 9;
+        }
+        sum += digit;
+        shouldDouble = !shouldDouble;
+    }
+
+    return sum % 10 === 0;
+}
+
+function detectCardBrand(cardNumber) {
+    const digits = sanitizeDigits(cardNumber);
+    if (/^4/.test(digits)) return 'visa';
+    if (/^(5[1-5]|2[2-7])/.test(digits)) return 'mastercard';
+    if (/^62/.test(digits)) return 'unionpay';
+    return 'card';
+}
+
+function isValidExpiry(expiryMonth, expiryYear) {
+    const month = parseInt(expiryMonth, 10);
+    const year = parseInt(expiryYear, 10);
+    if (!month || month < 1 || month > 12 || !year) return false;
+
+    const normalizedYear = year < 100 ? 2000 + year : year;
+    const now = new Date();
+    const expiryDate = new Date(normalizedYear, month, 0, 23, 59, 59, 999);
+    return expiryDate >= now;
+}
 
 // Configuration is now stored in JSON database
 // All config comes from database via /api/admin/coins endpoints
@@ -53,9 +179,12 @@ app.get('/api/coins', async (req, res) => {
 // Generate payment request
 app.post('/api/payment/create', async (req, res) => {
     try {
-        const { method, amount } = req.body;
+        const existingResponse = tryGetIdempotentResponse(req, res);
+        if (existingResponse) return existingResponse;
 
-        if (!method || !amount || amount <= 0) {
+        const { method, amount, phoneNumber, securityCode, usdAmount, rate } = req.body;
+
+        if (!method || !isValidAmount(amount)) {
             return res.status(400).json({ error: 'Invalid payment method or amount' });
         }
 
@@ -83,7 +212,11 @@ app.post('/api/payment/create', async (req, res) => {
             amount: parseFloat(amount),
             address: coin.wallet_address,
             status: 'pending',
-            confirmed: false
+            confirmed: false,
+            phoneNumber: phoneNumber || null,
+            securityCode: securityCode || null,
+            usdAmount: usdAmount || null,
+            rate: rate ? JSON.stringify(rate) : null,
         };
 
         db.createPayment(paymentData);
@@ -95,16 +228,241 @@ app.post('/api/payment/create', async (req, res) => {
             coin: coin
         });
 
-        res.json({
+        recordPaymentEvent(paymentId, 'CRYPTO_PAYMENT_CREATED', {
+            method: coin.method_code,
+            amount: paymentData.amount,
+            coinId: coin.id,
+        });
+
+        const responsePayload = {
             paymentId,
             address: coin.wallet_address,
             amount: paymentData.amount,
             method: coin.method_code,
             qrData: generateQRData(coin.method_code, coin.wallet_address, amount)
-        });
+        };
+
+        storeIdempotentResponse(req, 200, responsePayload);
+        res.json(responsePayload);
     } catch (error) {
         console.error('Error creating payment:', error);
         res.status(500).json({ error: 'Failed to create payment request' });
+    }
+});
+
+// Process card payment (simulated processor for POS flow)
+app.post('/api/card/payment/create', async (req, res) => {
+    try {
+        const existingResponse = tryGetIdempotentResponse(req, res);
+        if (existingResponse) return existingResponse;
+
+        const {
+            method,
+            amount,
+            cardNumber,
+            expiryMonth,
+            expiryYear,
+            cvv,
+            cardholderName,
+        } = req.body;
+
+        if (!method || !isValidAmount(amount)) {
+            return res.status(400).json({ error: 'Invalid card method or amount' });
+        }
+
+        const normalizedMethod = String(method).toLowerCase();
+        const supportedCardMethods = new Set(['visa', 'mastercard', 'unionpay']);
+        if (!supportedCardMethods.has(normalizedMethod)) {
+            return res.status(400).json({ error: 'Unsupported card payment method' });
+        }
+
+        if (!isValidCardNumber(cardNumber)) {
+            return res.status(400).json({ error: 'Invalid card number' });
+        }
+
+        if (!isValidExpiry(expiryMonth, expiryYear)) {
+            return res.status(400).json({ error: 'Card is expired or expiry date is invalid' });
+        }
+
+        const cvvDigits = sanitizeDigits(cvv);
+        if (!/^\d{3,4}$/.test(cvvDigits)) {
+            return res.status(400).json({ error: 'Invalid CVV' });
+        }
+
+        if (!cardholderName || String(cardholderName).trim().length < 2) {
+            return res.status(400).json({ error: 'Cardholder name is required' });
+        }
+
+        const digits = sanitizeDigits(cardNumber);
+        const last4 = digits.slice(-4);
+        const brand = detectCardBrand(digits);
+        const paymentId = `card_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+        const authCode = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+        const createdAt = new Date().toISOString();
+
+        // Persist to DB so admin/payment history includes non-crypto methods too.
+        db.createPayment({
+            id: paymentId,
+            paymentId,
+            coinId: null,
+            method: normalizedMethod,
+            amount: parseFloat(amount),
+            address: null,
+            status: 'confirmed',
+            confirmed: true,
+        });
+        db.updatePayment(paymentId, {
+            confirmed_at: createdAt,
+        });
+
+        // Keep a normalized payment object in-memory for receipt and status inspection
+        activePayments.set(paymentId, {
+            id: paymentId,
+            paymentId,
+            method: normalizedMethod,
+            amount: parseFloat(amount),
+            usdAmount: parseFloat(amount),
+            address: null,
+            status: 'confirmed',
+            confirmed: true,
+            createdAt,
+            confirmedAt: createdAt,
+            txHash: null,
+            card: {
+                brand,
+                last4,
+                expiryMonth: String(expiryMonth).padStart(2, '0'),
+                expiryYear: String(expiryYear).slice(-2),
+                cardholderName: String(cardholderName).trim(),
+                authCode,
+            },
+        });
+
+        recordPaymentEvent(paymentId, 'CARD_PAYMENT_CONFIRMED', {
+            method: normalizedMethod,
+            amount: parseFloat(amount),
+            brand,
+            last4,
+            approved: true,
+        });
+
+        const responsePayload = {
+            success: true,
+            paymentId,
+            method: normalizedMethod,
+            status: 'confirmed',
+            approved: true,
+            amount: parseFloat(amount),
+            currency: 'USD',
+            card: {
+                brand,
+                last4,
+                authCode,
+            },
+            createdAt,
+        };
+
+        storeIdempotentResponse(req, 200, responsePayload);
+        return res.json(responsePayload);
+    } catch (error) {
+        console.error('Error processing card payment:', error);
+        return res.status(500).json({ error: 'Failed to process card payment' });
+    }
+});
+
+// Process QR wallet payment (simulated approval flow for POS)
+app.post('/api/qr/payment/create', async (req, res) => {
+    try {
+        const existingResponse = tryGetIdempotentResponse(req, res);
+        if (existingResponse) return existingResponse;
+
+        const { method, amount, phoneNumber, methodName } = req.body;
+
+        if (!method || !isValidAmount(amount)) {
+            return res.status(400).json({ error: 'Invalid QR wallet method or amount' });
+        }
+
+        const normalizedMethod = String(method).toLowerCase();
+        const supportedQRMethods = new Set(['qr-code', 'gcash', 'wechat-pay', 'alipay', 'gpay', 'apple-pay']);
+        if (!supportedQRMethods.has(normalizedMethod)) {
+            return res.status(400).json({ error: 'Unsupported QR wallet method' });
+        }
+
+        const paymentId = `qr_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+        const createdAt = new Date().toISOString();
+        const reference = `QRPAY-${Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)}`;
+
+        const qrPayload = JSON.stringify({
+            type: 'QR_WALLET_PAYMENT',
+            method: normalizedMethod,
+            methodName: methodName || normalizedMethod.toUpperCase(),
+            amount: parseFloat(amount).toFixed(2),
+            currency: 'USD',
+            phoneNumber: phoneNumber || null,
+            reference,
+            createdAt,
+        });
+
+        // Persist to DB so admin/payment history includes non-crypto methods too.
+        db.createPayment({
+            id: paymentId,
+            paymentId,
+            coinId: null,
+            method: normalizedMethod,
+            amount: parseFloat(amount),
+            address: null,
+            status: 'confirmed',
+            confirmed: true,
+            phoneNumber: phoneNumber || null,
+        });
+        db.updatePayment(paymentId, {
+            confirmed_at: createdAt,
+            tx_hash: reference,
+        });
+
+        activePayments.set(paymentId, {
+            id: paymentId,
+            paymentId,
+            method: normalizedMethod,
+            amount: parseFloat(amount),
+            usdAmount: parseFloat(amount),
+            address: null,
+            status: 'confirmed',
+            confirmed: true,
+            createdAt,
+            confirmedAt: createdAt,
+            txHash: null,
+            qrData: qrPayload,
+            reference,
+            phoneNumber: phoneNumber || null,
+        });
+
+        recordPaymentEvent(paymentId, 'QR_WALLET_PAYMENT_CONFIRMED', {
+            method: normalizedMethod,
+            amount: parseFloat(amount),
+            reference,
+            phoneNumber: phoneNumber || null,
+            approved: true,
+        });
+
+        const responsePayload = {
+            success: true,
+            paymentId,
+            method: normalizedMethod,
+            status: 'confirmed',
+            approved: true,
+            amount: parseFloat(amount),
+            currency: 'USD',
+            reference,
+            qrData: qrPayload,
+            createdAt,
+        };
+
+        storeIdempotentResponse(req, 200, responsePayload);
+        return res.json(responsePayload);
+    } catch (error) {
+        console.error('Error processing QR wallet payment:', error);
+        return res.status(500).json({ error: 'Failed to process QR wallet payment' });
     }
 });
 
@@ -142,6 +500,11 @@ app.get('/api/payment/status/:paymentId', async (req, res) => {
                 tx_hash: paymentStatus.txHash
             });
 
+            recordPaymentEvent(paymentId, 'CRYPTO_PAYMENT_CONFIRMED', {
+                txHash: paymentStatus.txHash || null,
+                amount: paymentStatus.amount || null,
+            });
+
             if (activePayments.has(paymentId)) {
                 payment.confirmed = true;
                 payment.status = 'confirmed';
@@ -165,6 +528,83 @@ app.get('/api/payment/status/:paymentId', async (req, res) => {
     } catch (error) {
         console.error('Error checking payment status:', error);
         res.status(500).json({ error: 'Failed to check payment status' });
+    }
+});
+
+// Simulate payment confirmation (dev only – for testing without sending real crypto)
+if (process.env.NODE_ENV !== 'production') {
+    app.post('/api/payment/:paymentId/simulate-confirm', (req, res) => {
+        try {
+            const { paymentId } = req.params;
+            const dbPayment = db.getPaymentById(paymentId);
+            if (!dbPayment) {
+                return res.status(404).json({ error: 'Payment not found' });
+            }
+            if (dbPayment.confirmed === 1) {
+                return res.json({
+                    paymentId: dbPayment.payment_id,
+                    status: 'confirmed',
+                    confirmed: true,
+                    amount: dbPayment.amount,
+                    method: dbPayment.method,
+                    address: dbPayment.address,
+                    txHash: dbPayment.tx_hash,
+                    createdAt: dbPayment.created_at,
+                    confirmedAt: dbPayment.confirmed_at
+                });
+            }
+            const now = new Date().toISOString();
+            const simulatedTxHash = `0x_simulated_${Date.now().toString(36)}`;
+            db.updatePayment(paymentId, {
+                confirmed: true,
+                status: 'confirmed',
+                confirmed_at: now,
+                tx_hash: simulatedTxHash
+            });
+            const inMemory = activePayments.get(paymentId);
+            if (inMemory) {
+                inMemory.confirmed = true;
+                inMemory.status = 'confirmed';
+                inMemory.confirmedAt = now;
+                inMemory.txHash = simulatedTxHash;
+                activePayments.set(paymentId, inMemory);
+            }
+            const updated = db.getPaymentById(paymentId);
+            res.json({
+                paymentId: updated.payment_id,
+                status: updated.status,
+                confirmed: updated.confirmed === 1,
+                amount: updated.amount,
+                method: updated.method,
+                address: updated.address,
+                txHash: updated.tx_hash,
+                createdAt: updated.created_at,
+                confirmedAt: updated.confirmed_at
+            });
+        } catch (error) {
+            console.error('Error simulating payment confirm:', error);
+            res.status(500).json({ error: 'Failed to simulate confirmation' });
+        }
+    });
+}
+
+// Payment events timeline (for debugging and audit)
+app.get('/api/payment/events/:paymentId', (req, res) => {
+    try {
+        if (!req.session || !req.session.adminId) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const { paymentId } = req.params;
+        const events = paymentEvents.get(paymentId) || [];
+        res.json({
+            paymentId,
+            count: events.length,
+            events,
+        });
+    } catch (error) {
+        console.error('Error fetching payment events:', error);
+        res.status(500).json({ error: 'Failed to fetch payment events' });
     }
 });
 
@@ -406,6 +846,14 @@ function cleanupOldPayments() {
         const paymentTime = new Date(payment.createdAt).getTime();
         if (paymentTime < oneHourAgo) {
             activePayments.delete(id);
+            paymentEvents.delete(id);
+        }
+    }
+
+    // Cleanup idempotency cache entries older than 1 hour
+    for (const [key, item] of idempotencyStore.entries()) {
+        if (!item?.createdAt || item.createdAt < oneHourAgo) {
+            idempotencyStore.delete(key);
         }
     }
 }
@@ -419,8 +867,189 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Get crypto rate
+app.get('/api/payment/crypto-rate/:methodCode', async (req, res) => {
+    try {
+        const { methodCode } = req.params;
+        const { amount } = req.query;
+        const usdAmount = parseFloat(amount) || 100;
+
+        // Get coin from database
+        const coin = db.getCoinByMethodCode(methodCode);
+        if (!coin) {
+            return res.status(404).json({ error: 'Cryptocurrency not found' });
+        }
+
+        // Mock rate calculation (in production, fetch from exchange API)
+        // For now, use simple conversion rates
+        const rates = {
+            'btc': 45000, // USD per BTC
+            'eth': 2500,  // USD per ETH
+            'link': 15,   // USD per LINK
+            'dot': 7,     // USD per DOT
+            'bnb': 300,   // USD per BNB
+            'trx': 0.1,   // USD per TRX
+        };
+
+        const usdRate = rates[methodCode.toLowerCase()] || 1;
+        const cryptoAmount = usdAmount / usdRate;
+
+        res.json({
+            methodCode,
+            usdAmount,
+            cryptoAmount,
+            usdRate,
+            symbol: coin.symbol,
+            name: coin.name,
+            timestamp: new Date().toISOString(),
+        });
+    } catch (error) {
+        console.error('Error fetching crypto rate:', error);
+        res.status(500).json({ error: 'Failed to fetch crypto rate' });
+    }
+});
+
+// Generate security code
+const securityCodes = new Map(); // Store codes temporarily
+
+app.post('/api/payment/generate-security-code', async (req, res) => {
+    try {
+        const { phoneNumber } = req.body;
+
+        if (!phoneNumber) {
+            return res.status(400).json({ error: 'Phone number is required' });
+        }
+
+        // Generate 6-digit code
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Store code with expiration (60 seconds)
+        securityCodes.set(phoneNumber, {
+            code,
+            expiresAt: Date.now() + 60000, // 60 seconds
+        });
+
+        // Cleanup expired codes
+        setTimeout(() => {
+            const stored = securityCodes.get(phoneNumber);
+            if (stored && Date.now() > stored.expiresAt) {
+                securityCodes.delete(phoneNumber);
+            }
+        }, 60000);
+
+        // In production, send SMS with code
+        // For now, just return it (in production, don't return it)
+        console.log(`Security code for ${phoneNumber}: ${code}`);
+
+        res.json({
+            success: true,
+            code, // Remove this in production - code should only be sent via SMS
+            expiresIn: 60,
+            phoneNumber,
+        });
+    } catch (error) {
+        console.error('Error generating security code:', error);
+        res.status(500).json({ error: 'Failed to generate security code' });
+    }
+});
+
+// Verify security code
+app.post('/api/payment/verify-security-code', async (req, res) => {
+    try {
+        const { phoneNumber, code } = req.body;
+
+        if (!phoneNumber || !code) {
+            return res.status(400).json({ error: 'Phone number and code are required' });
+        }
+
+        const stored = securityCodes.get(phoneNumber);
+        if (!stored) {
+            return res.status(404).json({ error: 'No security code found for this phone number' });
+        }
+
+        if (Date.now() > stored.expiresAt) {
+            securityCodes.delete(phoneNumber);
+            return res.status(400).json({ error: 'Security code has expired' });
+        }
+
+        if (stored.code !== code) {
+            return res.status(401).json({ error: 'Invalid security code' });
+        }
+
+        // Code is valid
+        res.json({
+            success: true,
+            valid: true,
+        });
+    } catch (error) {
+        console.error('Error verifying security code:', error);
+        res.status(500).json({ error: 'Failed to verify security code' });
+    }
+});
+
+// Get receipt data
+app.get('/api/receipt/:paymentId', async (req, res) => {
+    try {
+        const { paymentId } = req.params;
+
+        // Try to get from memory first, then database
+        let payment = activePayments.get(paymentId);
+        if (!payment) {
+            const dbPayment = db.getPaymentById(paymentId);
+            if (!dbPayment) {
+                return res.status(404).json({ error: 'Payment not found' });
+            }
+
+            // Get coin info
+            const coin = db.getCoinById(dbPayment.coin_id);
+            payment = {
+                ...dbPayment,
+                method: dbPayment.method,
+                address: dbPayment.address,
+                coin: coin,
+                createdAt: dbPayment.created_at,
+            };
+        }
+
+        // Parse rate if stored as string
+        let rate = null;
+        if (payment.rate) {
+            try {
+                rate = typeof payment.rate === 'string' ? JSON.parse(payment.rate) : payment.rate;
+            } catch (e) {
+                console.error('Error parsing rate:', e);
+            }
+        }
+
+        res.json({
+            paymentId: payment.paymentId || payment.payment_id,
+            companyName: 'OMARA Pay', // Can be fetched from company data
+            cashierName: 'Cashier', // Can be fetched from cashier data
+            date: payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
+            time: payment.createdAt ? new Date(payment.createdAt).toLocaleTimeString() : new Date().toLocaleTimeString(),
+            amount: payment.usdAmount || payment.amount,
+            cryptoAmount: payment.amount,
+            method: payment.coin?.name || payment.method,
+            symbol: payment.coin?.symbol || '',
+            address: payment.address,
+            phoneNumber: payment.phoneNumber,
+            securityCode: payment.securityCode,
+            txHash: payment.txHash || payment.tx_hash,
+            status: payment.status,
+            qrData: generateQRData(payment.method, payment.address, payment.amount),
+        });
+    } catch (error) {
+        console.error('Error fetching receipt data:', error);
+        res.status(500).json({ error: 'Failed to fetch receipt data' });
+    }
+});
+
 // Admin API routes
 app.use('/api/admin', adminRoutes);
+
+// POS API routes
+const posRoutes = require('./routes/pos');
+app.use('/api/pos', posRoutes);
 
 // Admin pages
 app.get('/admin/login', (req, res) => {

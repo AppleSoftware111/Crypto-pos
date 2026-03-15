@@ -1,13 +1,10 @@
 // Configuration file for API endpoints and app settings
 
-// IMPORTANT: Update this with your server IP address
-// For Android Emulator: use '10.0.2.2' instead of 'localhost'
-// For Physical Device: use your computer's local IP (e.g., '192.168.1.100')
-// For Production: use your domain or server IP
-// export const API_BASE_URL = __DEV__
-//     ? 'http://10.0.2.2:4000' // Default for Android emulator
-//     : 'http://10.0.2.2:4000'; // Update for production
-export const API_BASE_URL = 'http://192.168.139.90:4000'; // ⚠️ Replace with YOUR computer's IP
+// IMPORTANT: API Base URL is now managed by dashboardConfig.js
+// For local development: Uses LOCAL_API_BASE_URL
+// For Omarapay integration: Set USE_OMARAPAY_API = true in dashboardConfig.js
+// This will be dynamically set by apiClient.js to avoid circular dependencies
+export const API_BASE_URL = 'http://192.168.139.90:4000'; // Default, will be overridden by dashboardConfig
 // Payment monitoring configuration
 export const PAYMENT_CHECK_INTERVAL = 2000; // 2 seconds (matches web app)
 export const MAX_RETRIES = 450; // 15 minutes (450 * 2 seconds = 900 seconds)

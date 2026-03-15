@@ -1,0 +1,22 @@
+{
+  "name": "Omarapay",
+  "short_name": "Omarapay",
+  "description": "Unified fintech payment platform",
+  "start_url": "/login",
+  "display": "standalone",
+  "theme_color": "#0F172A",
+  "background_color": "#F9FAFB",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "https://horizons-cdn.hostinger.com/4e11d677-f450-4074-b1a2-d97d8613297e/310160a090067ce6332ec6e51cd46366.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://horizons-cdn.hostinger.com/4e11d677-f450-4074-b1a2-d97d8613297e/310160a090067ce6332ec6e51cd46366.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

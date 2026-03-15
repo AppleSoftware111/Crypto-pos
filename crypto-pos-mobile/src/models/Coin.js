@@ -23,13 +23,15 @@ export class Coin {
   }
 
   getIconUrl(baseUrl) {
-    if (!this.icon) return null;
+    if (!this.icon || !baseUrl) return null;
     // If icon is already a full URL, return it
     if (this.icon.startsWith('http://') || this.icon.startsWith('https://')) {
       return this.icon;
     }
     // Otherwise, construct the full URL
-    return `${baseUrl}/${this.icon}`;
+    const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    const normalizedIcon = this.icon.startsWith('/') ? this.icon.slice(1) : this.icon;
+    return `${normalizedBaseUrl}/${normalizedIcon}`;
   }
 
   getDisplayName() {

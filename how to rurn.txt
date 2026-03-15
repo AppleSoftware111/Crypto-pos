@@ -1,0 +1,10 @@
+1. set the device / emulator date to today
+2. npm start
+3. npx expo start -c
+
+
+
+
+cd "D:\Work\crypto pos\crypto-pos-mobile\android"
+Remove-Item -Recurse -Force "..\node_modules\expo-modules-core\android\.cxx" -ErrorAction SilentlyContinue
+.\gradlew.bat clean assembleRelease --no-daemon

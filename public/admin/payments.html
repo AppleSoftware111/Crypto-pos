@@ -32,8 +32,8 @@
                 <option value="pending">Pending</option>
                 <option value="confirmed">Confirmed</option>
             </select>
-            <select id="coinFilter" style="padding: 8px; border-radius: 6px; border: 2px solid #e0e0e0;">
-                <option value="">All Coins</option>
+            <select id="paymentMethodFilter" style="padding: 8px; border-radius: 6px; border: 2px solid #e0e0e0;">
+                <option value="">All Payment Methods</option>
             </select>
             <button class="btn btn-primary" onclick="loadPayments()">Filter</button>
             <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
@@ -44,18 +44,19 @@
                 <thead>
                     <tr>
                         <th>Payment ID</th>
-                        <th>Coin</th>
+                        <th>Method</th>
                         <th>Amount</th>
                         <th>Address</th>
                         <th>Status</th>
                         <th>Transaction Hash</th>
                         <th>Created</th>
                         <th>Confirmed</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="paymentsTableBody">
                     <tr>
-                        <td colspan="8" class="loading">Loading payments...</td>
+                        <td colspan="9" class="loading">Loading payments...</td>
                     </tr>
                 </tbody>
             </table>
@@ -67,9 +68,37 @@
         </div>
     </div>
 
+    <div id="eventsModal" class="modal" onclick="closeEventsModal(event)">
+        <div class="modal-content" style="max-width: 900px; width: 95%;" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>Payment Events</h2>
+                <button class="close-btn" onclick="closeEventsModal()">&times;</button>
+            </div>
+            <div id="eventsMeta" style="margin-bottom: 12px; color: #666; font-size: 14px;"></div>
+            <div id="eventsBody" style="max-height: 60vh; overflow-y: auto;"></div>
+        </div>
+    </div>
+
     <script>
         let currentOffset = 0;
         const limit = 50;
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function prettyJson(value) {
+            try {
+                return JSON.stringify(value, null, 2);
+            } catch (error) {
+                return String(value);
+            }
+        }
 
         // Check authentication
         fetch('/api/admin/auth/status', { credentials: 'include' })
@@ -78,24 +107,46 @@
                 if (!data.authenticated) {
                     window.location.href = '/admin/login';
                 } else {
-                    loadCoins();
+                    loadPaymentMethods();
                     loadPayments();
                 }
             });
 
-        async function loadCoins() {
+        async function loadPaymentMethods() {
             try {
                 const res = await fetch('/api/admin/coins', { credentials: 'include' });
                 const data = await res.json();
-                const select = document.getElementById('coinFilter');
+                const select = document.getElementById('paymentMethodFilter');
+
+                // Non-crypto payment methods
+                const nonCryptoMethods = [
+                    { code: 'visa', label: 'Visa' },
+                    { code: 'mastercard', label: 'Mastercard' },
+                    { code: 'unionpay', label: 'UnionPay' },
+                    { code: 'qr-code', label: 'QR Code' },
+                    { code: 'gcash', label: 'GCash' },
+                    { code: 'gpay', label: 'Google Pay' },
+                    { code: 'apple-pay', label: 'Apple Pay' },
+                    { code: 'wechat-pay', label: 'WeChat Pay' },
+                    { code: 'alipay', label: 'Alipay' },
+                ];
+
+                nonCryptoMethods.forEach((method) => {
+                    const option = document.createElement('option');
+                    option.value = `method:${method.code}`;
+                    option.textContent = method.label;
+                    select.appendChild(option);
+                });
+
+                // Crypto methods from coin config
                 data.coins.forEach(coin => {
                     const option = document.createElement('option');
-                    option.value = coin.id;
+                    option.value = `coin:${coin.id}`;
                     option.textContent = `${coin.name} (${coin.symbol})`;
                     select.appendChild(option);
                 });
             } catch (error) {
-                console.error('Error loading coins:', error);
+                console.error('Error loading payment methods:', error);
             }
         }
 
@@ -103,14 +154,20 @@
             if (reset) currentOffset = 0;
 
             const status = document.getElementById('statusFilter').value;
-            const coinId = document.getElementById('coinFilter').value;
+            const selectedMethod = document.getElementById('paymentMethodFilter').value;
 
             const params = new URLSearchParams({
                 limit: limit,
                 offset: currentOffset
             });
             if (status) params.append('status', status);
-            if (coinId) params.append('coinId', coinId);
+            if (selectedMethod) {
+                if (selectedMethod.startsWith('coin:')) {
+                    params.append('coinId', selectedMethod.replace('coin:', ''));
+                } else if (selectedMethod.startsWith('method:')) {
+                    params.append('method', selectedMethod.replace('method:', ''));
+                }
+            }
 
             try {
                 const res = await fetch(`/api/admin/payments?${params}`, { credentials: 'include' });
@@ -124,14 +181,23 @@
                 if (data.payments && data.payments.length > 0) {
                     tbody.innerHTML += data.payments.map(p => `
                         <tr>
-                            <td><code style="font-size: 11px;">${p.payment_id.substring(0, 24)}...</code></td>
-                            <td>${p.symbol || p.coin_name}</td>
-                            <td>${p.amount} ${p.symbol || ''}</td>
-                            <td><code style="font-size: 10px;">${p.address.substring(0, 20)}...</code></td>
+                            <td><code style="font-size: 11px;">${escapeHtml((p.payment_id || '').substring(0, 24))}${(p.payment_id || '').length > 24 ? '...' : ''}</code></td>
+                            <td>${escapeHtml(p.symbol || p.coin_name || p.method || '-')}</td>
+                            <td>${escapeHtml(p.amount)} ${escapeHtml(p.symbol || '')}</td>
+                            <td><code style="font-size: 10px;">${p.address ? `${escapeHtml(p.address.substring(0, 20))}${p.address.length > 20 ? '...' : ''}` : '-'}</code></td>
                             <td><span class="status-badge status-${p.status}">${p.status}</span></td>
-                            <td>${p.tx_hash ? `<code style="font-size: 10px;">${p.tx_hash.substring(0, 16)}...</code>` : '-'}</td>
+                            <td>${p.tx_hash ? `<code style="font-size: 10px;">${escapeHtml(p.tx_hash.substring(0, 16))}${p.tx_hash.length > 16 ? '...' : ''}</code>` : '-'}</td>
                             <td>${new Date(p.created_at).toLocaleString()}</td>
                             <td>${p.confirmed_at ? new Date(p.confirmed_at).toLocaleString() : '-'}</td>
+                            <td>
+                                <button
+                                    class="btn btn-primary"
+                                    style="padding: 6px 10px; font-size: 12px;"
+                                    onclick="viewPaymentEvents('${escapeHtml(p.payment_id)}')"
+                                >
+                                    Events
+                                </button>
+                            </td>
                         </tr>
                     `).join('');
 
@@ -143,7 +209,7 @@
                     }
                 } else {
                     if (reset) {
-                        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #999;">No payments found</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #999;">No payments found</td></tr>';
                     }
                     document.getElementById('loadMoreBtn').style.display = 'none';
                 }
@@ -158,13 +224,60 @@
 
         function resetFilters() {
             document.getElementById('statusFilter').value = '';
-            document.getElementById('coinFilter').value = '';
+            document.getElementById('paymentMethodFilter').value = '';
             loadPayments();
         }
 
         function logout() {
             fetch('/api/admin/logout', { method: 'POST', credentials: 'include' })
                 .then(() => window.location.href = '/admin/login');
+        }
+
+        async function viewPaymentEvents(paymentId) {
+            const modal = document.getElementById('eventsModal');
+            const body = document.getElementById('eventsBody');
+            const meta = document.getElementById('eventsMeta');
+
+            modal.classList.add('show');
+            meta.textContent = `Payment ID: ${paymentId}`;
+            body.innerHTML = '<div class="loading">Loading payment events...</div>';
+
+            try {
+                const res = await fetch(`/api/payment/events/${encodeURIComponent(paymentId)}`, {
+                    credentials: 'include'
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Request failed (${res.status})`);
+                }
+
+                const data = await res.json();
+                meta.textContent = `Payment ID: ${paymentId} • Events: ${data.count || 0}`;
+
+                if (!data.events || data.events.length === 0) {
+                    body.innerHTML = '<div style="text-align:center; padding: 24px; color: #666;">No events recorded for this payment yet.</div>';
+                    return;
+                }
+
+                body.innerHTML = data.events.map((event) => `
+                    <div style="border:1px solid #e9ecef; border-radius:10px; padding:12px; margin-bottom:10px; background:#fff;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <strong style="color:#333;">${escapeHtml(event.type)}</strong>
+                            <span style="font-size:12px; color:#666;">${new Date(event.createdAt).toLocaleString()}</span>
+                        </div>
+                        <pre style="margin:0; padding:10px; background:#f8f9fa; border-radius:8px; font-size:12px; overflow:auto;">${escapeHtml(prettyJson(event.details || {}))}</pre>
+                    </div>
+                `).join('');
+            } catch (error) {
+                body.innerHTML = `<div style="padding:16px; color:#c0392b;">${escapeHtml(error.message || 'Failed to load events')}</div>`;
+            }
+        }
+
+        function closeEventsModal(evt) {
+            if (!evt || evt.target.id === 'eventsModal') {
+                document.getElementById('eventsModal').classList.remove('show');
+            }
         }
     </script>
 </body>

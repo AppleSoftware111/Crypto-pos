@@ -1,0 +1,47 @@
+/* Touch Optimization for Mobile Devices */
+
+/* Increase tap targets for all buttons */
+button, 
+[role="button"],
+input[type="submit"],
+input[type="button"],
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation; /* Improves tap response by disabling double-tap zoom */
+}
+
+/* Prevent accidental text selection on interactive elements */
+button, 
+.btn, 
+.nav-link,
+[role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Active state feedback for touch */
+@media (hover: none) {
+  button:active, 
+  [role="button"]:active,
+  .clickable-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+  }
+}
+
+/* Improve input accessibility on mobile */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+select,
+textarea {
+  font-size: 16px; /* Prevents auto-zoom on iOS */
+  min-height: 44px;
+}
+
+/* Smooth scrolling for touch devices */
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+}

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,15 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { usePaymentMonitoring } from '../hooks/usePaymentMonitoring';
 import QRCodeDisplay from '../components/QRCodeDisplay';
 import AddressCopy from '../components/AddressCopy';
 import PaymentStatus from '../components/PaymentStatus';
+import ReceiptService from '../services/ReceiptService';
+import { useAuth } from '../context/AuthContext';
+import { simulatePaymentConfirm } from '../api/endpoints';
 import { COLORS, FONT_SIZES } from '../utils/config';
 
 /**
@@ -18,30 +22,29 @@ import { COLORS, FONT_SIZES } from '../utils/config';
  * Displays payment QR code, address, and monitors payment status
  */
 const PaymentDisplayScreen = ({ route, navigation }) => {
-  const { paymentData, coin, amount } = route.params;
+  const { paymentData, coin, amount, method, usdAmount, phoneNumber } = route.params || {};
+  const displayCoin = coin || method;
   const { payment, confirmed, remainingTime } = usePaymentMonitoring(
     paymentData.paymentId
   );
+  const { cashier, company } = useAuth();
+  const [printing, setPrinting] = useState(false);
+  const [simulating, setSimulating] = useState(false);
 
   useEffect(() => {
     if (confirmed && payment) {
-      Alert.alert(
-        '✅ Payment Confirmed!',
-        `Payment of ${amount} ${coin.symbol} has been confirmed.${payment.txHash ? `\n\nTransaction: ${payment.txHash.substring(0, 16)}...` : ''}`,
-        [
-          {
-            text: 'New Payment',
-            onPress: () => navigation.navigate('PaymentMethod'),
-            style: 'default',
-          },
-          {
-            text: 'Stay Here',
-            style: 'cancel',
-          },
-        ]
-      );
+      // Navigate to success screen
+      const routeParams = route.params || {};
+      navigation.replace('PaymentSuccess', {
+        payment,
+        method: coin || routeParams.method,
+        amount: amount || routeParams.amount,
+        usdAmount: routeParams.usdAmount,
+        phoneNumber: routeParams.phoneNumber,
+        txHash: payment.txHash,
+      });
     }
-  }, [confirmed, payment, amount, coin, navigation]);
+  }, [confirmed, payment, amount, coin, navigation, route.params]);
 
   const handleNewPayment = () => {
     navigation.navigate('PaymentMethod');
@@ -62,6 +65,61 @@ const PaymentDisplayScreen = ({ route, navigation }) => {
     );
   };
 
+  const handleSimulatePaid = async () => {
+    if (simulating || confirmed) return;
+    try {
+      setSimulating(true);
+      const data = await simulatePaymentConfirm(paymentData.paymentId);
+      if (data && data.confirmed) {
+        navigation.replace('PaymentSuccess', {
+          payment: {
+            paymentId: data.paymentId,
+            status: data.status,
+            confirmed: data.confirmed,
+            amount: data.amount,
+            method: data.method,
+            address: data.address,
+            txHash: data.txHash,
+            confirmedAt: data.confirmedAt,
+          },
+          method: coin || route.params?.method,
+          amount: amount || route.params?.amount,
+          usdAmount: route.params?.usdAmount,
+          phoneNumber: route.params?.phoneNumber,
+          txHash: data.txHash,
+        });
+      }
+    } catch (e) {
+      Alert.alert('Simulate failed', e.message || 'Could not simulate confirmation.');
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const handlePrintReceipt = async () => {
+    try {
+      setPrinting(true);
+      
+      const receiptData = ReceiptService.generateReceiptData({
+        payment: payment || paymentData,
+        method: displayCoin,
+        amount: amount || paymentData.amount,
+        usdAmount,
+        phoneNumber,
+        securityCode: route.params?.securityCode,
+        companyName: company?.name,
+        cashierName: cashier?.name,
+        qrData: paymentData.qrData || paymentData.address,
+      });
+
+      await ReceiptService.printReceipt(receiptData);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to print receipt. Please try again.');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const status = payment?.status || 'pending';
 
   return (
@@ -79,13 +137,15 @@ const PaymentDisplayScreen = ({ route, navigation }) => {
       <View style={styles.infoCard}>
         <Text style={styles.infoLabel}>Amount</Text>
         <Text style={styles.infoValue}>
-          {amount} {coin.symbol}
+          {amount} {displayCoin?.symbol || displayCoin?.name || ''}
         </Text>
       </View>
 
       <View style={styles.infoCard}>
         <Text style={styles.infoLabel}>Payment Method</Text>
-        <Text style={styles.infoValue}>{coin.getDisplayName()}</Text>
+        <Text style={styles.infoValue}>
+          {displayCoin?.getDisplayName ? displayCoin.getDisplayName() : displayCoin?.name || 'N/A'}
+        </Text>
       </View>
 
       {/* QR Code */}
@@ -105,6 +165,37 @@ const PaymentDisplayScreen = ({ route, navigation }) => {
             {payment.txHash}
           </Text>
         </View>
+      )}
+
+      {/* Print Receipt Button */}
+      <TouchableOpacity
+        style={[styles.printButton, printing && styles.printButtonDisabled]}
+        onPress={handlePrintReceipt}
+        disabled={printing}
+      >
+        {printing ? (
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        ) : (
+          <>
+            <Text style={styles.printButtonIcon}>🖨️</Text>
+            <Text style={styles.printButtonText}>Print Receipt</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {/* Dev only: Simulate paid (no real crypto sent) */}
+      {__DEV__ && status === 'pending' && (
+        <TouchableOpacity
+          style={[styles.simulateButton, simulating && styles.printButtonDisabled]}
+          onPress={handleSimulatePaid}
+          disabled={simulating}
+        >
+          {simulating ? (
+            <ActivityIndicator size="small" color={COLORS.textSecondary} />
+          ) : (
+            <Text style={styles.simulateButtonText}>Simulate paid</Text>
+          )}
+        </TouchableOpacity>
       )}
 
       {/* Action Buttons */}
@@ -216,6 +307,44 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: FONT_SIZES.large,
     fontWeight: '600',
+  },
+  printButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginBottom: 12,
+    gap: 8,
+  },
+  printButtonDisabled: {
+    opacity: 0.6,
+  },
+  printButtonIcon: {
+    fontSize: 20,
+  },
+  printButtonText: {
+    color: COLORS.primary,
+    fontSize: FONT_SIZES.large,
+    fontWeight: '600',
+  },
+  simulateButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  simulateButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.medium,
+    fontWeight: '500',
   },
 });
 

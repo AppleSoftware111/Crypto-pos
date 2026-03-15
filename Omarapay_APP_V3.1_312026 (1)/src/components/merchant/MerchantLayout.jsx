@@ -1,0 +1,151 @@
+import React, { useEffect, useState } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { useBusiness } from '@/context/BusinessContext';
+import { useMerchant } from '@/context/MerchantContext';
+import { Button } from '@/components/ui/button';
+import { Menu, Bell, User, HelpCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import MerchantSidebar from './MerchantSidebar';
+import ModeToggle from './ModeToggle';
+import ModeBanner from './ModeBanner';
+import DemoWalkthrough from '@/components/demo/DemoWalkthrough';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const MerchantLayout = () => {
+    const { isAuthenticated, loading: authLoading } = useAuth();
+    const { 
+        selectedAccountType, 
+        businessProfile, 
+        loading: businessLoading,
+    } = useBusiness();
+    const { isModeDemo } = useMerchant();
+    
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [mobileOpen, setMobileOpen] = useState(false);
+    
+    // Walkthrough State
+    const [isWalkthroughActive, setIsWalkthroughActive] = useState(false);
+
+    useEffect(() => {
+        if (!authLoading && !businessLoading) {
+            if (!isAuthenticated) {
+                navigate('/login');
+            } else if (selectedAccountType !== 'business' || !businessProfile) {
+                if (!location.pathname.includes('/business/register')) {
+                     navigate('/wallet'); 
+                }
+            }
+        }
+    }, [isAuthenticated, authLoading, businessLoading, selectedAccountType, businessProfile, navigate, location]);
+
+    // Auto-start walkthrough on first visit to Demo Mode
+    useEffect(() => {
+        if (!businessLoading && isModeDemo()) {
+            const hasCompleted = localStorage.getItem('omara_demo_walkthrough_completed');
+            if (!hasCompleted && location.pathname.includes('dashboard')) {
+                // Short delay to allow render
+                setTimeout(() => setIsWalkthroughActive(true), 1000);
+            }
+        }
+    }, [isModeDemo, businessLoading, location.pathname]);
+
+    const handleStartWalkthrough = () => {
+        setIsWalkthroughActive(true);
+        // If not on dashboard, navigate there first
+        if (!location.pathname.includes('dashboard')) {
+            navigate('/merchant/dashboard');
+        }
+    };
+
+    const handleWalkthroughComplete = () => {
+        setIsWalkthroughActive(false);
+        localStorage.setItem('omara_demo_walkthrough_completed', 'true');
+    };
+
+    if (authLoading || businessLoading) {
+        return <div className="min-h-screen flex items-center justify-center bg-gray-50">Loading Merchant Portal...</div>;
+    }
+
+    if (!businessProfile && location.pathname !== '/business/register') return null;
+
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+            <MerchantSidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+            
+            <div className="lg:pl-64 flex flex-col min-h-screen">
+                {/* Top Navbar */}
+                <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-white dark:bg-gray-900 px-6 shadow-sm">
+                    <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)}>
+                        <Menu className="h-6 w-6" />
+                    </Button>
+                    
+                    <div className="flex flex-1 items-center justify-between">
+                         <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 hidden md:block">
+                            {location.pathname.split('/').pop().charAt(0).toUpperCase() + location.pathname.split('/').pop().slice(1)}
+                         </h1>
+                         
+                         <div className="flex items-center gap-4 ml-auto">
+                            <ModeToggle />
+                            <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2" />
+                            
+                            {/* Help Menu */}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="text-gray-500">
+                                        <HelpCircle className="h-5 w-5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={handleStartWalkthrough}>
+                                        Restart Demo Walkthrough
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => window.open('https://help.omara.com', '_blank')}>
+                                        Help Center
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+
+                            <Button variant="ghost" size="icon" className="text-gray-500">
+                                <Bell className="h-5 w-5" />
+                            </Button>
+                            
+                            <div className="flex items-center gap-3 pl-4 border-l">
+                                <div className="text-right hidden md:block">
+                                    <p className="text-sm font-medium">{businessProfile?.ownerFirstName}</p>
+                                    <p className="text-xs text-muted-foreground">Merchant Owner</p>
+                                </div>
+                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                                    <User className="h-4 w-4" />
+                                </div>
+                            </div>
+                         </div>
+                    </div>
+                </header>
+
+                {/* Mode Banner with Walkthrough Trigger */}
+                <ModeBanner onStartWalkthrough={handleStartWalkthrough} />
+
+                {/* Main Content */}
+                <main className="flex-1 p-6 overflow-x-hidden">
+                    <Outlet />
+                </main>
+            </div>
+
+            {/* Walkthrough Component */}
+            <DemoWalkthrough 
+                isActive={isWalkthroughActive} 
+                onComplete={handleWalkthroughComplete}
+                onSkip={() => setIsWalkthroughActive(false)}
+            />
+        </div>
+    );
+};
+
+export default MerchantLayout;

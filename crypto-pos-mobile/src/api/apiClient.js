@@ -1,21 +1,51 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../utils/config';
+import { getCompanyAuth, getCashierAuth } from '../utils/storage';
+import { getApiBaseUrl, getAuthHeaders, isOmarapayConfigured } from '../utils/dashboardConfig';
 
 // Create axios instance with default configuration
+// Base URL is dynamically determined by dashboardConfig
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
+  baseURL: getApiBaseUrl(),
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
 });
 
-// Request interceptor for logging (development only)
+// Request interceptor for authentication and logging
 apiClient.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Add Omarapay API authentication headers if configured
+    if (isOmarapayConfigured()) {
+      const omarapayHeaders = getAuthHeaders();
+      Object.assign(config.headers, omarapayHeaders);
+    } else {
+      // Add local API authentication tokens if available
+      try {
+        const companyAuth = await getCompanyAuth();
+        const cashierAuth = await getCashierAuth();
+
+        // Add company token if available
+        if (companyAuth.token) {
+          config.headers['X-Company-Token'] = companyAuth.token;
+        }
+
+        // Add cashier token if available
+        if (cashierAuth.token) {
+          config.headers['X-Cashier-Token'] = cashierAuth.token;
+        }
+      } catch (error) {
+        console.error('[API] Error getting auth tokens:', error);
+      }
+    }
+
+    // Logging (development only)
     if (__DEV__) {
       console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`);
+      if (isOmarapayConfigured()) {
+        console.log('[API] Using Omarapay API');
+      }
     }
     return config;
   },
@@ -66,5 +96,19 @@ apiClient.interceptors.response.use(
   }
 );
 
-export default apiClient;
+/**
+ * Set base URL at runtime (e.g. after loading stored override or user input)
+ */
+export const setApiBaseURL = (url) => {
+  if (url && typeof url === 'string') {
+    apiClient.defaults.baseURL = url.replace(/\/+$/, '');
+    if (__DEV__) console.log('[API] Base URL set to', apiClient.defaults.baseURL);
+  }
+};
 
+/**
+ * Get current base URL (for display in dev UI)
+ */
+export const getApiBaseURL = () => apiClient.defaults.baseURL;
+
+export default apiClient;
