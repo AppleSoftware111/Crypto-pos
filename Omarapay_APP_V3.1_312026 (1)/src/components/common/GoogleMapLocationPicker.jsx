@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import LocationConfirmationModal from './LocationConfirmationModal';
 
 const libraries = ['places'];
-const API_KEY = "AIzaSyDePFSG6KrHCjwmNq_w-iFaiocQogO0a5w"; // Supplied key
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const defaultCenter = {
   lat: 14.5995, // Manila

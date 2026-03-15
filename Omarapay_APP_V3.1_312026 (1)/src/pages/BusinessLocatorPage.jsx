@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { REGISTRATION_STATUS } from '@/lib/businessSchema';
 
-const googleMapsApiKey = "AIzaSyDePFSG6KrHCjwmNq_w-iFaiocQogO0a5w";
+const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
 const mapContainerStyle = {
   width: '100%',
