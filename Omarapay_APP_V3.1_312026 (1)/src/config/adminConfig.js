@@ -1,11 +1,11 @@
-import { 
-  Wallet, 
-  ArrowDownLeft, 
-  ArrowUpRight, 
-  Globe, 
-  Droplets, 
-  ShieldAlert, 
-  BarChart3, 
+import {
+  Wallet,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Globe,
+  Droplets,
+  ShieldAlert,
+  BarChart3,
   Settings,
   LayoutDashboard,
   CheckSquare,
@@ -26,7 +26,8 @@ import {
 export const ADMIN_WALLET_ADDRESS = '0xf256DE1D126061166c24905a91F7312c84623C60';
 
 export const ADMIN_WALLETS = [
-  ADMIN_WALLET_ADDRESS,
+  // ADMIN_WALLET_ADDRESS,
+  '0xbc048634fCbB6E0c4Db3FFd9B3487B94508BBd65',
   // Future admin wallets can be appended here securely
 ];
 

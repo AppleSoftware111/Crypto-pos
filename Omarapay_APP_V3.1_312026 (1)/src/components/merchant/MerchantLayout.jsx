@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
 import { useMerchant } from '@/context/MerchantContext';
+import { REGISTRATION_STATUS } from '@/lib/businessSchema';
 import { Button } from '@/components/ui/button';
 import { Menu, Bell, User, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -74,6 +75,33 @@ const MerchantLayout = () => {
     }
 
     if (!businessProfile && location.pathname !== '/business/register') return null;
+
+    // Only approved (ACTIVE) merchants can access dashboard and POS
+    if (businessProfile.status !== REGISTRATION_STATUS.ACTIVE) {
+        const statusLabel = (businessProfile.status || '').replace(/_/g, ' ');
+        return (
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-6">
+                <div className="max-w-md w-full text-center space-y-4">
+                    <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Pending admin approval</h1>
+                    <p className="text-muted-foreground">
+                        Your business <strong>{businessProfile.businessName}</strong> is under review. You will get access to the merchant dashboard and POS once an admin approves your registration.
+                    </p>
+                    {businessProfile.status && (
+                        <p className="text-sm text-muted-foreground">Status: {statusLabel}</p>
+                    )}
+                    {businessProfile.status === REGISTRATION_STATUS.REJECTED && businessProfile.rejectionReason && (
+                        <p className="text-sm text-amber-700 dark:text-amber-400">{businessProfile.rejectionReason}</p>
+                    )}
+                    {businessProfile.status === REGISTRATION_STATUS.REJECTED && (
+                        <p className="text-sm text-muted-foreground">Contact support if you have questions.</p>
+                    )}
+                    <Button onClick={() => navigate('/wallet')} className="mt-4">
+                        Back to Wallet
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950">

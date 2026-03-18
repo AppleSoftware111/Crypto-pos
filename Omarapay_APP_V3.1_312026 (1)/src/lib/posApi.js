@@ -46,8 +46,8 @@ export const cashierLogin = (companyId, cashierId, password) =>
   posApi.post('/api/pos/cashier/login', { companyId, cashierId, password }).then((r) => r.data);
 export const posAuthStatus = () => posApi.get('/api/pos/auth/status').then((r) => r.data);
 export const posLogout = () => posApi.post('/api/pos/logout').then((r) => r.data);
-export const getTransactions = (limit = 50, offset = 0) =>
-  posApi.get('/api/pos/transactions', { params: { limit, offset } }).then((r) => r.data);
+export const getTransactions = (limit = 50, offset = 0, signal = null) =>
+  posApi.get('/api/pos/transactions', { params: { limit, offset }, signal }).then((r) => r.data);
 export const healthCheck = () => posApi.get('/api/health').then((r) => r.data);
 
 export default posApi;

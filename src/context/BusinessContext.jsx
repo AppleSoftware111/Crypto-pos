@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAccount } from 'wagmi';
 import { useToast } from '@/components/ui/use-toast';
 import { businessStorageService } from '@/lib/businessStorageService';
+import { REGISTRATION_STATUS } from '@/lib/businessSchema';
 import { STORAGE_KEYS, saveToLocalStorage, getFromLocalStorage } from '@/lib/localStorageUtils';
 
 const BusinessContext = createContext(null);
@@ -16,7 +17,8 @@ export const BusinessProvider = ({ children }) => {
     const { address: walletAddress, isConnected } = useAccount();
     const [userUUID, setUserUUID] = useState('');
     const [businessProfile, setBusinessProfile] = useState(null); 
-    const [userBusinesses, setUserBusinesses] = useState([]); 
+    const [userBusinesses, setUserBusinesses] = useState([]);
+    const [adminQueue, setAdminQueue] = useState([]);
     
     const [selectedAccountType, setSelectedAccountType] = useState(() => {
         return getFromLocalStorage(STORAGE_KEYS.ACCOUNT_TYPE, 'personal');
@@ -178,6 +180,54 @@ export const BusinessProvider = ({ children }) => {
         }
     }, [switchAccount]);
 
+    // --- Admin approval queue and actions ---
+    const getAdminQueue = useCallback(() => {
+        const queue = businessStorageService.getAllMerchantsForAdmin();
+        setAdminQueue(queue);
+    }, []);
+
+    const approveBusinessRegistration = useCallback((businessId, riskLevel) => {
+        const found = businessStorageService.findMerchantByMid(businessId);
+        if (!found) return;
+        const { uuid, walletAddress } = found;
+        const timestamp = new Date().toISOString();
+        businessStorageService.updateMerchantStatus(uuid, walletAddress, businessId, REGISTRATION_STATUS.ACTIVE, {
+            approvedAt: timestamp,
+            riskLevel: riskLevel ?? null
+        });
+        getAdminQueue();
+        if (businessProfile?.merchantId === businessId) {
+            loadMerchantsForCurrentWallet();
+        }
+    }, [getAdminQueue, businessProfile?.merchantId, loadMerchantsForCurrentWallet]);
+
+    const rejectBusinessRegistration = useCallback((businessId, actionReason) => {
+        const found = businessStorageService.findMerchantByMid(businessId);
+        if (!found) return;
+        const { uuid, walletAddress } = found;
+        businessStorageService.updateMerchantStatus(uuid, walletAddress, businessId, REGISTRATION_STATUS.REJECTED, {
+            rejectionReason: actionReason,
+            adminNotes: actionReason
+        });
+        getAdminQueue();
+        if (businessProfile?.merchantId === businessId) {
+            loadMerchantsForCurrentWallet();
+        }
+    }, [getAdminQueue, businessProfile?.merchantId, loadMerchantsForCurrentWallet]);
+
+    const requestMoreDocuments = useCallback((businessId, actionReason) => {
+        const found = businessStorageService.findMerchantByMid(businessId);
+        if (!found) return;
+        const { uuid, walletAddress } = found;
+        businessStorageService.updateMerchantStatus(uuid, walletAddress, businessId, REGISTRATION_STATUS.AWAITING_DOCUMENTS, {
+            adminNotes: actionReason
+        });
+        getAdminQueue();
+        if (businessProfile?.merchantId === businessId) {
+            loadMerchantsForCurrentWallet();
+        }
+    }, [getAdminQueue, businessProfile?.merchantId, loadMerchantsForCurrentWallet]);
+
     const value = useMemo(() => ({
         userUUID,
         walletAddress,
@@ -193,7 +243,13 @@ export const BusinessProvider = ({ children }) => {
         switchToPersonalAccount,
         getPersonalDashboardRoute,
         navigateToPersonalDashboard,
-        navigateToMerchantDashboard
+        navigateToMerchantDashboard,
+        // Admin approval
+        adminQueue,
+        getAdminQueue,
+        approveBusinessRegistration,
+        rejectBusinessRegistration,
+        requestMoreDocuments
     }), [
         userUUID,
         walletAddress,
@@ -201,13 +257,18 @@ export const BusinessProvider = ({ children }) => {
         userBusinesses, 
         selectedAccountType,
         loading,
+        adminQueue,
         switchAccount, 
         registerBusiness, 
         loadMerchantsForCurrentWallet,
         switchToPersonalAccount,
         getPersonalDashboardRoute,
         navigateToPersonalDashboard,
-        navigateToMerchantDashboard
+        navigateToMerchantDashboard,
+        getAdminQueue,
+        approveBusinessRegistration,
+        rejectBusinessRegistration,
+        requestMoreDocuments
     ]);
 
     return <BusinessContext.Provider value={value}>{children}</BusinessContext.Provider>;

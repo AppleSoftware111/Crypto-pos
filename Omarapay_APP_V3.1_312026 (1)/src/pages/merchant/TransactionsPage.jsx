@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Search, Filter } from 'lucide-react';
+import { Download, Search, Filter, RefreshCw } from 'lucide-react';
 
 const TransactionsPage = () => {
-    const { transactions, loading, isModeDemo } = useMerchant();
+    const { transactions, loading, isModeDemo, isModeLive, refreshData, liveTransactionsError } = useMerchant();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
 
@@ -31,10 +31,23 @@ const TransactionsPage = () => {
                         {isModeDemo() ? "Viewing Demo Transactions" : "Viewing Live Transactions"}
                     </p>
                 </div>
-                <Button variant="outline">
-                    <Download className="mr-2 h-4 w-4" /> Export CSV
-                </Button>
+                <div className="flex gap-2">
+                    {isModeLive() && (
+                        <Button variant="outline" size="icon" onClick={() => refreshData()} title="Refresh transactions">
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                    )}
+                    <Button variant="outline">
+                        <Download className="mr-2 h-4 w-4" /> Export CSV
+                    </Button>
+                </div>
             </div>
+
+            {isModeLive() && transactions.length === 0 && liveTransactionsError && (
+                <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-2">
+                    {liveTransactionsError}
+                </p>
+            )}
 
             <Card>
                 <CardHeader>
