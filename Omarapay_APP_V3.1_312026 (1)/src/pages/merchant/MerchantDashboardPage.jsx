@@ -11,9 +11,12 @@ import {
     ArrowDownRight, 
     Users,
     Activity,
-    Wallet
+    Wallet,
+    Receipt,
+    Coins
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { POS_ENABLED } from '@/config/posConfig';
 import {
     Table,
     TableBody,
@@ -166,7 +169,17 @@ const MerchantDashboardPage = () => {
                         <CardDescription>Manage your store efficiently.</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-4">
-                        <Button className="w-full justify-start" onClick={() => navigate('/merchant/payouts')}>
+                        {POS_ENABLED && (
+                            <>
+                                <Button className="w-full justify-start" onClick={() => navigate('/merchant/pos')}>
+                                    <Receipt className="mr-2 h-4 w-4" /> Accept Payments (POS)
+                                </Button>
+                                <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/merchant/pos-settings')}>
+                                    <Coins className="mr-2 h-4 w-4" /> POS Settings
+                                </Button>
+                            </>
+                        )}
+                        <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/merchant/payouts')}>
                             <Wallet className="mr-2 h-4 w-4" /> Request Payout
                         </Button>
                         <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/merchant/settings')}>

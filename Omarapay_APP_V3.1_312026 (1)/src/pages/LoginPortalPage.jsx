@@ -11,6 +11,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
 
@@ -19,12 +21,16 @@ import SignatureVerification from '@/components/auth/SignatureVerification';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useDisconnect } from 'wagmi';
+import { GoogleLogin } from '@react-oauth/google';
 
 const LoginPortalPage = ({ portalType = 'user' }) => {
   const navigate = useNavigate();
-  const { signatureVerified, isWalletAdmin } = useAuth();
+  const { signatureVerified, isWalletAdmin, currentUser, login, loginWithGoogle } = useAuth();
   const { toast } = useToast();
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [emailLoading, setEmailLoading] = useState(false);
 
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
@@ -53,30 +59,30 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
 
   const currentConfig = portalConfig[portalType] || portalConfig.user;
 
-  // Login Redirection Logic
+  // Login Redirection Logic: wallet (after verify) or session user (Google/email)
+  const shouldRedirectUser = currentUser && (
+    (isConnected && signatureVerified) ||
+    (!isConnected && (currentUser.authMethod === 'google' || currentUser.authMethod === 'email'))
+  );
   useEffect(() => {
-    if (signatureVerified && isConnected) {
-      setIsRedirecting(true);
-      
-      const timer = setTimeout(() => {
-        // Force redirect based on portalType logic
-        if (portalType === 'admin') {
-            if (isWalletAdmin) {
-                navigate(currentConfig.redirect, { replace: true });
-            } else {
-                // If trying to access admin portal but not an admin, stay here or go to user home
-                // The ProtectedAdminRoute will handle the block, but here we can guide them
-                navigate(currentConfig.redirect, { replace: true }); // Let the route guard handle the denial
-            }
-        } else {
-            // For user/register, go to chain selection
-            navigate(currentConfig.redirect, { replace: true });
-        }
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+    if (portalType === 'admin') {
+      if (signatureVerified && isConnected) {
+        setIsRedirecting(true);
+        const t = setTimeout(() => {
+          navigate(currentConfig.redirect, { replace: true });
+        }, 1000);
+        return () => clearTimeout(t);
+      }
+      return;
     }
-  }, [signatureVerified, isWalletAdmin, navigate, isConnected, portalType, currentConfig]);
+    if (shouldRedirectUser) {
+      setIsRedirecting(true);
+      const t = setTimeout(() => {
+        navigate(currentConfig.redirect, { replace: true });
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [signatureVerified, isWalletAdmin, navigate, isConnected, portalType, currentConfig, currentUser, shouldRedirectUser]);
 
   const copyAddress = async () => {
     await navigator.clipboard.writeText(address);
@@ -166,8 +172,90 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
 
           <CardContent className="space-y-4">
             {!isConnected ? (
-              <div className="flex justify-center py-4">
-                <ConnectButton />
+              <div className="space-y-4">
+                <div className="flex justify-center py-2">
+                  <ConnectButton />
+                </div>
+                {(portalType === 'user' || portalType === 'register') && (
+                  <>
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-gray-200 dark:border-gray-700" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase text-muted-foreground">
+                        <span className="bg-white dark:bg-gray-950 px-2">Or</span>
+                      </div>
+                    </div>
+                    <form
+                      className="space-y-3"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!email.trim()) {
+                          toast({ title: 'Enter email', variant: 'destructive' });
+                          return;
+                        }
+                        setEmailLoading(true);
+                        try {
+                          await login(email.trim(), password || 'demo');
+                          toast({ title: 'Signed in', description: 'Redirecting...' });
+                        } catch (err) {
+                          toast({ title: 'Sign-in failed', variant: 'destructive' });
+                        } finally {
+                          setEmailLoading(false);
+                        }
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="login-email">Email</Label>
+                        <Input
+                          id="login-email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="bg-white dark:bg-gray-900"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="login-password">Password</Label>
+                        <Input
+                          id="login-password"
+                          type="password"
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="bg-white dark:bg-gray-900"
+                        />
+                      </div>
+                      <Button type="submit" className="w-full" disabled={emailLoading}>
+                        {emailLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Sign in with email
+                      </Button>
+                    </form>
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-gray-200 dark:border-gray-700" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase text-muted-foreground">
+                        <span className="bg-white dark:bg-gray-950 px-2">Or</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-center">
+                      <GoogleLogin
+                        onSuccess={(credentialResponse) => {
+                          if (loginWithGoogle(credentialResponse)) {
+                            toast({ title: 'Signed in with Google', description: 'Redirecting...' });
+                          }
+                        }}
+                        onError={() => toast({ title: 'Google sign-in failed', variant: 'destructive' })}
+                        theme="outline"
+                        size="large"
+                        text="signin_with"
+                        shape="rectangular"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <>

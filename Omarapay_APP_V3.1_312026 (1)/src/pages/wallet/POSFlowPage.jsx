@@ -7,7 +7,7 @@ import POSFlow from '@/components/pos/POSFlow';
 
 /**
  * POS (Point of Sale) - Accept Payments
- * Embedded in Omarapay user dashboard. Uses Crypto POS backend API.
+ * Business account only. Embedded in merchant dashboard. Uses Crypto POS backend API.
  */
 const POSFlowPage = () => {
   return (

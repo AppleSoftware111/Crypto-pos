@@ -45,7 +45,10 @@ const defaultForm = {
   enabled: 1,
 };
 
-export default function AdminPOSCoinsPage() {
+const defaultTitle = 'POS Coins';
+const defaultSubtitle = 'Crypto POS — add, edit, and manage payment methods';
+
+export default function AdminPOSCoinsPage({ pageTitle = defaultTitle, pageSubtitle = defaultSubtitle } = {}) {
   const { toast } = useToast();
   const [coins, setCoins] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -183,7 +186,7 @@ export default function AdminPOSCoinsPage() {
 
   if (!configured) {
     return (
-      <StandardPageWrapper title="POS Coins" subtitle="Manage Crypto POS payment methods">
+      <StandardPageWrapper title={pageTitle} subtitle={pageSubtitle}>
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Not configured</AlertTitle>
@@ -197,7 +200,7 @@ export default function AdminPOSCoinsPage() {
   }
 
   return (
-    <StandardPageWrapper title="POS Coins" subtitle="Crypto POS — add, edit, and manage payment methods">
+    <StandardPageWrapper title={pageTitle} subtitle={pageSubtitle}>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>

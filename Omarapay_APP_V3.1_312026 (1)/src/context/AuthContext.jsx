@@ -159,6 +159,38 @@ export const AuthProvider = ({ children }) => {
       return login(email, password); // For demo, register = login
   }, [login]);
 
+  /** Decode JWT payload (base64url). Returns { email, name } or null. */
+  const decodeGoogleCredential = useCallback((credential) => {
+      if (!credential || typeof credential !== 'string') return null;
+      try {
+          const parts = credential.split('.');
+          if (parts.length !== 3) return null;
+          const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
+          return {
+              email: decoded.email || '',
+              name: decoded.name || decoded.given_name || decoded.email?.split('@')[0] || 'User',
+          };
+      } catch {
+          return null;
+      }
+  }, []);
+
+  const loginWithGoogle = useCallback((credentialResponse) => {
+      const payload = credentialResponse?.credential ? decodeGoogleCredential(credentialResponse.credential) : null;
+      if (!payload) return false;
+      const googleUser = {
+          id: userIdManager.getUserId(),
+          email: payload.email,
+          name: payload.name,
+          role: 'user',
+          authMethod: 'google',
+      };
+      saveToLocalStorage('omara_session_user', googleUser);
+      setCurrentUser(googleUser);
+      return true;
+  }, [decodeGoogleCredential]);
+
   const adminLogin = useCallback(async (email, password) => {
       if (email === 'admin@omara.com' && password === 'admin123') {
           const adminUser = {
@@ -201,6 +233,7 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
+    loginWithGoogle,
     adminLogin,
 
     // Wallet State
@@ -217,7 +250,7 @@ export const AuthProvider = ({ children }) => {
   }), [
     currentUser, loading,
     isAdminAuthenticated, isWalletAdmin,
-    login, register, logout, adminLogin,
+    login, register, logout, loginWithGoogle, adminLogin,
     isConnected, address, currentWalletAddress,
     signatureVerified, verifySignature,
     selectedBlockchain, setSelectedBlockchain, getSelectedBlockchain

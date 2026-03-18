@@ -14,19 +14,29 @@ import {
     Menu,
     X,
     Wallet,
-    Fingerprint
+    Fingerprint,
+    Receipt,
+    Coins
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useBusiness } from '@/context/BusinessContext';
 import { useAuth } from '@/context/AuthContext';
+import { POS_ENABLED } from '@/config/posConfig';
 
 const MerchantSidebar = ({ mobileOpen, setMobileOpen }) => {
     const { businessProfile, navigateToPersonalDashboard } = useBusiness();
     const { walletAddress } = useAuth();
     
+    const posItems = POS_ENABLED
+        ? [
+            { name: 'Accept Payments (POS)', path: '/merchant/pos', icon: Receipt, tourId: 'nav-pos' },
+            { name: 'POS Settings', path: '/merchant/pos-settings', icon: Coins, tourId: 'nav-pos-settings' },
+          ]
+        : [];
     const menuItems = [
         { name: 'Dashboard', path: '/merchant/dashboard', icon: LayoutDashboard, tourId: 'nav-dashboard' },
+        ...posItems,
         { name: 'Transactions', path: '/merchant/transactions', icon: CreditCard, tourId: 'nav-transactions' },
         { name: 'Payouts', path: '/merchant/payouts', icon: Banknote, tourId: 'nav-payouts' },
         { name: 'Reports', path: '/merchant/reports', icon: BarChart3, tourId: 'nav-reports' },

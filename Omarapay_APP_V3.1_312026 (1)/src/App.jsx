@@ -21,6 +21,7 @@ import ChainSelectionPage from '@/pages/ChainSelectionPage';
 import UserDashboardPage from '@/pages/UserDashboardPage';
 import UserWalletLayout from '@/components/user/UserWalletLayout';
 import POSFlowPage from '@/pages/wallet/POSFlowPage';
+import BusinessPOSCoinsPage from '@/pages/wallet/BusinessPOSCoinsPage';
 
 // Business & Merchant Pages
 import BusinessRegistrationPage from '@/pages/business/BusinessRegistrationPage';
@@ -130,12 +131,15 @@ function App() {
                 <Route path="/wallet/withdraw" element={<UserDashboardPage defaultTab="withdraw" />} />
                 <Route path="/wallet/send" element={<UserDashboardPage defaultTab="send" />} />
                 <Route path="/wallet/receive" element={<UserDashboardPage defaultTab="receive" />} />
-                <Route path="/wallet/pos" element={<POSFlowPage />} />
+                <Route path="/wallet/pos" element={<Navigate to="/merchant/pos" replace />} />
+                <Route path="/wallet/pos-settings" element={<Navigate to="/merchant/pos-settings" replace />} />
             </Route>
 
             {/* --- Merchant Routes --- */}
             <Route element={<MerchantWrapper />}>
                 <Route path="/merchant/dashboard" element={<MerchantDashboardPage />} />
+                <Route path="/merchant/pos" element={<POSFlowPage />} />
+                <Route path="/merchant/pos-settings" element={<BusinessPOSCoinsPage />} />
                 <Route path="/merchant/transactions" element={<TransactionsPage />} />
                 <Route path="/merchant/payouts" element={<PayoutsPage />} />
                 <Route path="/merchant/reports" element={<ReportsPage />} />

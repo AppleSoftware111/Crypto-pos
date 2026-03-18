@@ -4,7 +4,7 @@ import { useUsers } from '@/context/UserContext';
 import { useBusiness } from '@/context/BusinessContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Lock, Building2, PlusCircle, ArrowRight, Fingerprint, Wallet, ChevronRight, CreditCard } from 'lucide-react';
+import { Lock, Building2, PlusCircle, ArrowRight, Fingerprint, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +22,6 @@ import ReceiveMoneyPage from '@/pages/wallet/ReceiveMoneyPage';
 import StandardPageWrapper from '@/components/layout/StandardPageWrapper';
 import { blockchainConfig } from '@/config/blockchainConfig';
 import { useToast } from '@/components/ui/use-toast';
-import { POS_ENABLED } from '@/config/posConfig';
 
 const UserDashboardPage = ({ defaultTab = 'overview' }) => {
   const { selectedBlockchainId, walletAddress } = useAuth();
@@ -109,26 +108,6 @@ const UserDashboardPage = ({ defaultTab = 'overview' }) => {
          </Card>
       </div>
 
-      {/* Accept Payments (POS) quick access */}
-      {POS_ENABLED && (
-      <div className="mb-8">
-        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-blue-200 dark:border-blue-800 cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/wallet/pos')}>
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-xl">
-                <CreditCard className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg">Accept Payments (POS)</h3>
-                <p className="text-sm text-muted-foreground">Accept crypto and card payments from customers</p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground" />
-          </CardContent>
-        </Card>
-      </div>
-      )}
-
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
         <div className="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
           <TabsList className="bg-gray-100 dark:bg-gray-800 p-1 h-auto rounded-xl inline-flex w-auto min-w-full md:min-w-0">
@@ -156,9 +135,11 @@ const UserDashboardPage = ({ defaultTab = 'overview' }) => {
                        <Building2 className="w-6 h-6 text-gray-700 dark:text-gray-300" />
                        My Merchant Accounts
                    </h2>
-                   <Button size="sm" onClick={() => navigate('/business/register')}>
-                       <PlusCircle className="w-4 h-4 mr-2" /> Register New Business
-                   </Button>
+                   {userBusinesses.length > 0 && (
+                       <Button size="sm" onClick={() => navigate('/business/register')}>
+                           <PlusCircle className="w-4 h-4 mr-2" /> Register New Business
+                       </Button>
+                   )}
                </div>
 
                {userBusinesses.length > 0 ? (

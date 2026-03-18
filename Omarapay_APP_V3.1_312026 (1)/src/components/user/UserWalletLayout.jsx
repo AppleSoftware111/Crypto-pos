@@ -14,13 +14,11 @@ import {
   Sparkles,
   ShieldCheck,
   FileText,
-  Briefcase,
-  CreditCard
+  Briefcase
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import BlockchainSwitcher from "@/components/wallet/BlockchainSwitcher";
-import { POS_ENABLED } from "@/config/posConfig";
 
 const ImpersonationBanner = () => {
   const { currentUser, stopImpersonating, impersonatingFrom } = useAuth();
@@ -52,7 +50,6 @@ const UserWalletLayout = () => {
 
   const navItems = [
     { name: "Overview", icon: LayoutDashboard, path: "/wallet" },
-    ...(POS_ENABLED ? [{ name: "Accept Payments (POS)", icon: CreditCard, path: "/wallet/pos" }] : []),
     { name: "Register Business", icon: Briefcase, path: "/business/register" },
     { name: "Deposit", icon: Plus, path: "/wallet/deposit" },
     { name: "Withdraw", icon: ArrowUpRight, path: "/wallet/withdraw" },
