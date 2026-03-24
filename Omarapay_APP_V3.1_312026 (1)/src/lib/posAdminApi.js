@@ -46,4 +46,20 @@ export const getPOSReceipt = (paymentId) =>
 
 export const isPOSAdminConfigured = () => !!adminApiKey;
 
+// App users (Crypto POS user auth store)
+export const getAdminUsers = (params = {}) =>
+  adminClient.get('/api/admin/users', { params }).then((r) => r.data);
+
+export const getAdminUser = (id) =>
+  adminClient.get(`/api/admin/users/${encodeURIComponent(id)}`).then((r) => r.data.user);
+
+export const createAdminUser = (data) =>
+  adminClient.post('/api/admin/users', data).then((r) => r.data.user);
+
+export const updateAdminUser = (id, data) =>
+  adminClient.patch(`/api/admin/users/${encodeURIComponent(id)}`, data).then((r) => r.data.user);
+
+export const deactivateAdminUser = (id) =>
+  adminClient.delete(`/api/admin/users/${encodeURIComponent(id)}`).then((r) => r.data);
+
 export default adminClient;

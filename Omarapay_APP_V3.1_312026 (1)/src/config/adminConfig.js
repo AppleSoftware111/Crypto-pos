@@ -11,7 +11,8 @@ import {
   CheckSquare,
   CreditCard,
   Coins,
-  Receipt
+  Receipt,
+  Users
 } from 'lucide-react';
 
 // ==============================================================================
@@ -28,6 +29,7 @@ export const ADMIN_WALLET_ADDRESS = '0xf256DE1D126061166c24905a91F7312c84623C60'
 export const ADMIN_WALLETS = [
   // ADMIN_WALLET_ADDRESS,
   '0xbc048634fCbB6E0c4Db3FFd9B3487B94508BBd65',
+  '0x1f27F54EEe0DB3D515A4600138e41234e2d32917',
   // Future admin wallets can be appended here securely
 ];
 
@@ -83,6 +85,7 @@ export const adminMenuStructure = [
   {
     title: 'System',
     items: [
+      { name: 'User Management', path: '/admin/users', icon: Users },
       { name: 'Settings & Admins', path: '/admin/settings', icon: Settings },
     ]
   }

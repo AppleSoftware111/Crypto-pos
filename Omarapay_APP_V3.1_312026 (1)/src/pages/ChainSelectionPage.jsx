@@ -18,19 +18,27 @@ import {
 
 const ChainSelectionPage = () => {
   const navigate = useNavigate();
-  const { setSelectedBlockchain, selectedBlockchain, signatureVerified, isConnected, walletAddress } = useAuth();
+  const { setSelectedBlockchain, selectedBlockchain, signatureVerified, isConnected, walletAddress, currentUser } = useAuth();
   const { disconnect } = useWalletDisconnect();
   
   const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   useEffect(() => {
+    const sessionOnly =
+      currentUser &&
+      (currentUser.authMethod === 'email' || currentUser.authMethod === 'google') &&
+      !isConnected;
+    if (sessionOnly) {
+      navigate('/wallet', { replace: true });
+      return;
+    }
     if (!isConnected) {
         navigate('/login');
     } else if (!signatureVerified) {
         navigate('/login');
     }
-  }, [isConnected, signatureVerified, navigate]);
+  }, [isConnected, signatureVerified, navigate, currentUser]);
 
   const handleSelect = (chain) => {
     setSelectedBlockchain(chain);

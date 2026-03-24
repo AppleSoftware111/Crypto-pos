@@ -10,7 +10,7 @@ import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit';
 import { config } from './wagmi';
 import '@rainbow-me/rainbowkit/styles.css';
 
-// Google OAuth (optional: set VITE_GOOGLE_OAUTH_CLIENT_ID in .env)
+// Google OAuth — only wrap when client ID is set (empty client_id breaks GSI and spams console)
 import { GoogleOAuthProvider } from '@react-oauth/google';
 const googleClientId = import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID || '';
 
@@ -29,24 +29,29 @@ if ('serviceWorker' in navigator) {
 
 const queryClient = new QueryClient();
 
-// CRITICAL: WagmiProvider must be the outermost provider to ensure
-// all hooks (useAccount, useSwitchChain, etc.) work throughout the app.
+// CRITICAL: WagmiProvider must wrap RainbowKit; Google provider only when OAuth is configured.
+const appTree = (
+  <WagmiProvider config={config}>
+    <QueryClientProvider client={queryClient}>
+      <RainbowKitProvider
+        theme={lightTheme({
+          accentColor: '#2563eb', // Blue-600 to match Omara brand
+          accentColorForeground: 'white',
+          borderRadius: 'medium',
+        })}
+      >
+        <App />
+      </RainbowKitProvider>
+    </QueryClientProvider>
+  </WagmiProvider>
+);
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <>
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          <RainbowKitProvider 
-            theme={lightTheme({
-              accentColor: '#2563eb', // Blue-600 to match Omara brand
-              accentColorForeground: 'white',
-              borderRadius: 'medium',
-            })}
-          >
-            <App />
-          </RainbowKitProvider>
-        </QueryClientProvider>
-      </WagmiProvider>
-    </GoogleOAuthProvider>
+    {googleClientId ? (
+      <GoogleOAuthProvider clientId={googleClientId}>{appTree}</GoogleOAuthProvider>
+    ) : (
+      appTree
+    )}
   </>,
 );

@@ -23,6 +23,8 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useDisconnect } from 'wagmi';
 import { GoogleLogin } from '@react-oauth/google';
 
+const googleAuthEnabled = Boolean(import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID);
+
 const LoginPortalPage = ({ portalType = 'user' }) => {
   const navigate = useNavigate();
   const { signatureVerified, isWalletAdmin, currentUser, login, loginWithGoogle } = useAuth();
@@ -64,6 +66,15 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
     (isConnected && signatureVerified) ||
     (!isConnected && (currentUser.authMethod === 'google' || currentUser.authMethod === 'email'))
   );
+
+  // Email/Google users must not go to /chain-selection (that page requires a connected wallet)
+  const userPortalRedirect =
+    currentUser &&
+    !isConnected &&
+    (currentUser.authMethod === 'google' || currentUser.authMethod === 'email')
+      ? '/wallet'
+      : currentConfig.redirect;
+
   useEffect(() => {
     if (portalType === 'admin') {
       if (signatureVerified && isConnected) {
@@ -78,11 +89,11 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
     if (shouldRedirectUser) {
       setIsRedirecting(true);
       const t = setTimeout(() => {
-        navigate(currentConfig.redirect, { replace: true });
+        navigate(userPortalRedirect, { replace: true });
       }, 800);
       return () => clearTimeout(t);
     }
-  }, [signatureVerified, isWalletAdmin, navigate, isConnected, portalType, currentConfig, currentUser, shouldRedirectUser]);
+  }, [signatureVerified, isWalletAdmin, navigate, isConnected, portalType, currentConfig, currentUser, shouldRedirectUser, userPortalRedirect]);
 
   const copyAddress = async () => {
     await navigator.clipboard.writeText(address);
@@ -194,12 +205,17 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
                           toast({ title: 'Enter email', variant: 'destructive' });
                           return;
                         }
+                        if (!password.trim()) {
+                          toast({ title: 'Enter password', variant: 'destructive' });
+                          return;
+                        }
                         setEmailLoading(true);
                         try {
-                          await login(email.trim(), password || 'demo');
+                          await login(email.trim(), password);
                           toast({ title: 'Signed in', description: 'Redirecting...' });
                         } catch (err) {
-                          toast({ title: 'Sign-in failed', variant: 'destructive' });
+                          const message = err?.response?.data?.error || 'Sign-in failed';
+                          toast({ title: message, variant: 'destructive' });
                         } finally {
                           setEmailLoading(false);
                         }
@@ -240,19 +256,42 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
                         <span className="bg-white dark:bg-gray-950 px-2">Or</span>
                       </div>
                     </div>
-                    <div className="flex justify-center">
-                      <GoogleLogin
-                        onSuccess={(credentialResponse) => {
-                          if (loginWithGoogle(credentialResponse)) {
-                            toast({ title: 'Signed in with Google', description: 'Redirecting...' });
-                          }
-                        }}
-                        onError={() => toast({ title: 'Google sign-in failed', variant: 'destructive' })}
-                        theme="outline"
-                        size="large"
-                        text="signin_with"
-                        shape="rectangular"
-                      />
+                    <div className="flex flex-col items-center gap-2">
+                      {googleAuthEnabled ? (
+                        <GoogleLogin
+                          onSuccess={async (credentialResponse) => {
+                            try {
+                              if (await loginWithGoogle(credentialResponse)) {
+                                toast({ title: 'Signed in with Google', description: 'Redirecting...' });
+                              }
+                            } catch (err) {
+                              const message = err?.response?.data?.error || 'Google sign-in failed';
+                              toast({ title: message, variant: 'destructive' });
+                            }
+                          }}
+                          onError={() => toast({ title: 'Google sign-in failed', variant: 'destructive' })}
+                          theme="outline"
+                          size="large"
+                          text="signin_with"
+                          shape="rectangular"
+                        />
+                      ) : (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full max-w-[320px] h-11 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-950 dark:border-gray-600 dark:text-gray-200"
+                            disabled
+                          >
+                            Sign in with Google
+                          </Button>
+                          <p className="text-xs text-center text-muted-foreground px-2 max-w-sm">
+                            Add <code className="text-[10px] sm:text-xs">VITE_GOOGLE_OAUTH_CLIENT_ID</code> to{' '}
+                            <code className="text-[10px] sm:text-xs">.env</code> and restart the dev server to enable
+                            Google sign-in.
+                          </p>
+                        </>
+                      )}
                     </div>
                   </>
                 )}

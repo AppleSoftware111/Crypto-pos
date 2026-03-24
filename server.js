@@ -3,9 +3,12 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const session = require('express-session');
+const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const { getDatabase } = require('./database');
 const adminRoutes = require('./routes/admin');
+const adminUsersRoutes = require('./routes/adminUsers');
+const authRoutes = require('./routes/auth');
 const { requireAuthHTML } = require('./middleware/auth');
 require('dotenv').config();
 
@@ -51,6 +54,7 @@ app.use('/api/', apiLimiter);
 // Initialize database
 const db = getDatabase();
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static('public'));
 
 // Session configuration
@@ -1044,8 +1048,12 @@ app.get('/api/receipt/:paymentId', async (req, res) => {
     }
 });
 
-// Admin API routes
+// Admin API routes (user CRUD must be registered before legacy admin router)
+app.use('/api/admin', adminUsersRoutes);
 app.use('/api/admin', adminRoutes);
+
+// User auth API routes
+app.use('/api/auth', authRoutes);
 
 // POS API routes
 const posRoutes = require('./routes/pos');

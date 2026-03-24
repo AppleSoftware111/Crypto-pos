@@ -52,6 +52,8 @@ class DatabaseManager {
                 admin_logs: [],
                 companies: [],
                 cashiers: [],
+                users: [],
+                refresh_tokens: [],
                 _meta: {
                     version: '1.0.0',
                     created_at: new Date().toISOString()
@@ -66,6 +68,8 @@ class DatabaseManager {
         if (!this.data.admin_logs) this.data.admin_logs = [];
         if (!this.data.companies) this.data.companies = [];
         if (!this.data.cashiers) this.data.cashiers = [];
+        if (!this.data.users) this.data.users = [];
+        if (!this.data.refresh_tokens) this.data.refresh_tokens = [];
 
         // Initialize default admin if no users exist
         if (this.data.admin_users.length === 0) {
@@ -96,7 +100,9 @@ class DatabaseManager {
                 payments: [],
                 admin_logs: [],
                 companies: [],
-                cashiers: []
+                cashiers: [],
+                users: [],
+                refresh_tokens: []
             };
         }
         return this.data;
@@ -688,6 +694,170 @@ class DatabaseManager {
         }
 
         return null;
+    }
+
+    // User authentication methods (email/google)
+    getUserById(userId) {
+        const data = this.readData();
+        return data.users.find(u => u.id === userId) || null;
+    }
+
+    getUserByEmail(email) {
+        const data = this.readData();
+        const normalized = String(email || '').trim().toLowerCase();
+        return data.users.find(u => String(u.email || '').toLowerCase() === normalized) || null;
+    }
+
+    getUserByGoogleId(googleId) {
+        const data = this.readData();
+        return data.users.find(u => u.google_id === googleId) || null;
+    }
+
+    createUser(userData) {
+        const data = this.readData();
+        const id = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const now = new Date().toISOString();
+        const user = {
+            id,
+            email: String(userData.email || '').trim().toLowerCase(),
+            password_hash: userData.password_hash || null,
+            name: userData.name || '',
+            role: userData.role || 'user',
+            provider: userData.provider || 'email',
+            google_id: userData.google_id || null,
+            email_verified: Boolean(userData.email_verified),
+            status: userData.status || 'active',
+            created_at: now,
+            updated_at: now,
+            last_login: null,
+        };
+        data.users.push(user);
+        this.writeData(data);
+        return user;
+    }
+
+    updateUser(userId, updates) {
+        const data = this.readData();
+        const user = data.users.find(u => u.id === userId);
+        if (!user) return null;
+        Object.assign(user, updates, { updated_at: new Date().toISOString() });
+        this.writeData(data);
+        return user;
+    }
+
+    authenticateUser(email, password) {
+        const data = this.readData();
+        const normalized = String(email || '').trim().toLowerCase();
+        const user = data.users.find(
+            u => String(u.email || '').toLowerCase() === normalized && u.status === 'active'
+        );
+        if (!user || !user.password_hash) {
+            return null;
+        }
+        if (!bcrypt.compareSync(password, user.password_hash)) {
+            return null;
+        }
+        user.last_login = new Date().toISOString();
+        user.updated_at = new Date().toISOString();
+        this.writeData(data);
+        return user;
+    }
+
+    createRefreshToken(tokenData) {
+        const data = this.readData();
+        const now = new Date().toISOString();
+        const token = {
+            id: tokenData.id,
+            user_id: tokenData.user_id,
+            token_hash: tokenData.token_hash,
+            expires_at: tokenData.expires_at,
+            created_at: now,
+            revoked_at: null,
+            revoked_reason: null,
+            replaced_by_token_id: null,
+            user_agent: tokenData.user_agent || null,
+            ip_address: tokenData.ip_address || null,
+        };
+        data.refresh_tokens.push(token);
+        this.writeData(data);
+        return token;
+    }
+
+    getValidRefreshTokenByHash(tokenHash) {
+        const data = this.readData();
+        const now = Date.now();
+        return data.refresh_tokens.find((t) => {
+            if (t.token_hash !== tokenHash) return false;
+            if (t.revoked_at) return false;
+            if (!t.expires_at) return false;
+            return new Date(t.expires_at).getTime() > now;
+        }) || null;
+    }
+
+    revokeRefreshToken(tokenId, reason = 'revoked', replacedByTokenId = null) {
+        const data = this.readData();
+        const token = data.refresh_tokens.find(t => t.id === tokenId);
+        if (!token || token.revoked_at) return false;
+        token.revoked_at = new Date().toISOString();
+        token.revoked_reason = reason;
+        token.replaced_by_token_id = replacedByTokenId || null;
+        this.writeData(data);
+        return true;
+    }
+
+    revokeUserRefreshTokens(userId, reason = 'logout_all') {
+        const data = this.readData();
+        const now = new Date().toISOString();
+        let changed = false;
+        data.refresh_tokens.forEach((t) => {
+            if (t.user_id === userId && !t.revoked_at) {
+                t.revoked_at = now;
+                t.revoked_reason = reason;
+                changed = true;
+            }
+        });
+        if (changed) {
+            this.writeData(data);
+        }
+        return changed;
+    }
+
+    /**
+     * List users for admin (includes password_hash — strip in API layer).
+     * @param {{ search?: string, role?: string, provider?: string, status?: string, limit?: number, offset?: number }} opts
+     */
+    listUsers(opts = {}) {
+        const data = this.readData();
+        const search = String(opts.search || '').trim().toLowerCase();
+        const role = String(opts.role || '').trim().toLowerCase();
+        const provider = String(opts.provider || '').trim().toLowerCase();
+        const status = String(opts.status || '').trim().toLowerCase();
+        const limit = Math.min(Math.max(parseInt(opts.limit, 10) || 100, 1), 500);
+        const offset = Math.max(parseInt(opts.offset, 10) || 0, 0);
+
+        let users = [...(data.users || [])];
+
+        if (search) {
+            users = users.filter((u) => {
+                const em = String(u.email || '').toLowerCase();
+                const nm = String(u.name || '').toLowerCase();
+                return em.includes(search) || nm.includes(search);
+            });
+        }
+        if (role) {
+            users = users.filter((u) => String(u.role || '').toLowerCase() === role);
+        }
+        if (provider) {
+            users = users.filter((u) => String(u.provider || '').toLowerCase().includes(provider));
+        }
+        if (status) {
+            users = users.filter((u) => String(u.status || '').toLowerCase() === status);
+        }
+
+        users.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        const total = users.length;
+        const slice = users.slice(offset, offset + limit);
+        return { users: slice, total };
     }
 
     close() {

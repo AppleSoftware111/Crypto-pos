@@ -11,7 +11,13 @@ import { useAccount, useDisconnect } from "wagmi";
 import { blockchainConfig } from "@/config/blockchainConfig";
 import { isAdminWallet } from "@/config/adminConfig";
 import { userIdManager } from "@/lib/userIdManager";
-import { getFromLocalStorage, saveToLocalStorage } from "@/lib/localStorageUtils";
+import {
+  loginWithEmail,
+  registerWithEmail,
+  loginWithGoogleToken,
+  logoutSession,
+  bootstrapAuthSession,
+} from "@/lib/authApi";
 
 const AuthContext = createContext(null);
 
@@ -33,6 +39,7 @@ export const AuthProvider = ({ children }) => {
   
   // Combined User State
   const [currentUser, setCurrentUser] = useState(null);
+  const [sessionUser, setSessionUser] = useState(null);
   const [loading, setLoading] = useState(true);
   
   const [signatureVerified, setSignatureVerified] = useState(false);
@@ -41,49 +48,66 @@ export const AuthProvider = ({ children }) => {
 
   const { toast } = useToast();
 
-  // Initialize from LocalStorage (Mock Session)
+  // Initialize from backend: refresh cookie first, then /me (avoids 401 on /me when logged out)
   useEffect(() => {
+    let cancelled = false;
     const initAuth = async () => {
-        // Check for stored user session (mock login)
-        const storedUser = getFromLocalStorage('omara_session_user', null);
-        
-        // Check wallet
-        if (address) {
-            // Wallet takes precedence or merges
-            const walletUser = {
-                id: userIdManager.getExistingUserId() || 'wallet-user',
-                wallet_address: address,
-                role: isAdminWallet(address) ? 'admin' : 'user',
-                authMethod: 'wallet',
-                email: storedUser?.email || null, // Merge if available
-                name: storedUser?.name || 'Wallet User'
-            };
-            
-            // Only update if changed to prevent loops
-            setCurrentUser(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(walletUser)) return walletUser;
-                return prev;
-            });
-            
-            setIsWalletAdmin(isAdminWallet(address));
-            setCurrentWalletAddress(address);
-        } else if (storedUser) {
-            // Email/Password session only
-            setCurrentUser(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(storedUser)) return storedUser;
-                return prev;
-            });
-            setIsWalletAdmin(false);
-            setCurrentWalletAddress(null);
-        } else {
-            setCurrentUser(null);
-        }
-        
-        setLoading(false);
+      try {
+        const { user } = await bootstrapAuthSession();
+        if (!cancelled) setSessionUser(user);
+      } catch {
+        if (!cancelled) setSessionUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-
     initAuth();
-  }, [address]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Build the effective user model from wallet and backend session
+  useEffect(() => {
+    if (address) {
+      const walletUser = {
+        id: userIdManager.getExistingUserId() || 'wallet-user',
+        wallet_address: address,
+        role: isAdminWallet(address) ? 'admin' : 'user',
+        authMethod: 'wallet',
+        email: sessionUser?.email || null,
+        name: sessionUser?.name || 'Wallet User',
+      };
+      setCurrentUser(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(walletUser)) return walletUser;
+        return prev;
+      });
+      setIsWalletAdmin(isAdminWallet(address));
+      setCurrentWalletAddress(address);
+      return;
+    }
+
+    if (sessionUser) {
+      const mappedUser = {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        name: sessionUser.name || sessionUser.email?.split('@')[0] || 'User',
+        role: sessionUser.role || 'user',
+        authMethod: String(sessionUser.provider || 'email').includes('google') ? 'google' : 'email',
+      };
+      setCurrentUser(prev => {
+        if (JSON.stringify(prev) !== JSON.stringify(mappedUser)) return mappedUser;
+        return prev;
+      });
+      setIsWalletAdmin(false);
+      setCurrentWalletAddress(null);
+      return;
+    }
+
+    setCurrentUser(null);
+    setIsWalletAdmin(false);
+    setCurrentWalletAddress(null);
+  }, [address, sessionUser]);
 
   // Handle Wallet Connection Side Effects
   useEffect(() => {
@@ -135,61 +159,38 @@ export const AuthProvider = ({ children }) => {
       return selectedBlockchain || blockchainConfig.ethereum;
   }, [selectedBlockchain]);
 
-  // Local Storage Login Mock
   const login = useCallback(async (email, password) => {
       setLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate API
-
-      // Simple mock: accept any email/password for demo, store in LS
-      const mockUser = {
-          id: userIdManager.getUserId(), // Ensure consistent ID
-          email,
-          name: email.split('@')[0],
-          role: 'user',
-          authMethod: 'email'
-      };
-
-      saveToLocalStorage('omara_session_user', mockUser);
-      setCurrentUser(mockUser);
-      setLoading(false);
-      return { user: mockUser };
-  }, []);
-
-  const register = useCallback(async (email, password, metadata) => {
-      return login(email, password); // For demo, register = login
-  }, [login]);
-
-  /** Decode JWT payload (base64url). Returns { email, name } or null. */
-  const decodeGoogleCredential = useCallback((credential) => {
-      if (!credential || typeof credential !== 'string') return null;
       try {
-          const parts = credential.split('.');
-          if (parts.length !== 3) return null;
-          const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-          const decoded = JSON.parse(decodeURIComponent(escape(atob(payload))));
-          return {
-              email: decoded.email || '',
-              name: decoded.name || decoded.given_name || decoded.email?.split('@')[0] || 'User',
-          };
-      } catch {
-          return null;
+        const result = await loginWithEmail({ email: email.trim(), password });
+        setSessionUser(result?.user || null);
+        return result;
+      } finally {
+        setLoading(false);
       }
   }, []);
 
-  const loginWithGoogle = useCallback((credentialResponse) => {
-      const payload = credentialResponse?.credential ? decodeGoogleCredential(credentialResponse.credential) : null;
-      if (!payload) return false;
-      const googleUser = {
-          id: userIdManager.getUserId(),
-          email: payload.email,
-          name: payload.name,
-          role: 'user',
-          authMethod: 'google',
-      };
-      saveToLocalStorage('omara_session_user', googleUser);
-      setCurrentUser(googleUser);
+  const register = useCallback(async (email, password, metadata) => {
+      setLoading(true);
+      try {
+        const result = await registerWithEmail({
+            email: email.trim(),
+            password,
+            name: metadata?.name || email.split('@')[0],
+        });
+        setSessionUser(result?.user || null);
+        return result;
+      } finally {
+        setLoading(false);
+      }
+  }, []);
+
+  const loginWithGoogle = useCallback(async (credentialResponse) => {
+      if (!credentialResponse?.credential) return false;
+      const result = await loginWithGoogleToken(credentialResponse.credential);
+      setSessionUser(result?.user || null);
       return true;
-  }, [decodeGoogleCredential]);
+  }, []);
 
   const adminLogin = useCallback(async (email, password) => {
       if (email === 'admin@omara.com' && password === 'admin123') {
@@ -200,7 +201,6 @@ export const AuthProvider = ({ children }) => {
               name: 'Super Admin',
               authMethod: 'email'
           };
-          saveToLocalStorage('omara_session_user', adminUser);
           setCurrentUser(adminUser);
           setIsAdminAuthenticated(true);
           return true;
@@ -209,13 +209,18 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem('omara_session_user');
+    try {
+      await logoutSession();
+    } catch {
+      // no-op: proceed with local cleanup
+    }
     if (isConnected) disconnect();
     
     setSignatureVerified(false);
     setCurrentWalletAddress(null);
     setIsWalletAdmin(false);
     setCurrentUser(null);
+    setSessionUser(null);
     setIsAdminAuthenticated(false);
     
     window.location.href = "/login";
