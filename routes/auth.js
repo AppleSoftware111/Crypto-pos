@@ -67,6 +67,17 @@ function parseDurationMs(value) {
 
 function getCookieOptions() {
     const isProd = process.env.NODE_ENV === 'production';
+    const crossSite = String(process.env.AUTH_COOKIE_CROSS_SITE || '').toLowerCase() === 'true';
+    // SPA on another origin (e.g. Vercel) + API on ngrok/custom domain needs SameSite=None; Secure (browsers require both).
+    if (crossSite) {
+        return {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            path: '/api/auth',
+            maxAge: parseDurationMs(getRefreshTtl()),
+        };
+    }
     return {
         httpOnly: true,
         secure: isProd,

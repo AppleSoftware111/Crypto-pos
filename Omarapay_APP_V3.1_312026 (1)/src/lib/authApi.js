@@ -3,6 +3,11 @@ import { getPOSApiBaseUrl } from '@/config/posConfig';
 
 const AUTH_API_BASE_URL = import.meta.env.VITE_AUTH_API_BASE_URL || getPOSApiBaseUrl();
 
+const defaultHeaders = { 'Content-Type': 'application/json' };
+if (String(AUTH_API_BASE_URL).includes('ngrok')) {
+  defaultHeaders['ngrok-skip-browser-warning'] = 'true';
+}
+
 let accessToken = null;
 let isRefreshing = false;
 let refreshPromise = null;
@@ -20,7 +25,7 @@ export const clearAccessToken = () => {
 const authApi = axios.create({
   baseURL: AUTH_API_BASE_URL,
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { ...defaultHeaders },
   withCredentials: true,
 });
 
