@@ -18,6 +18,12 @@ import {
   logoutSession,
   bootstrapAuthSession,
 } from "@/lib/authApi";
+import {
+  loginCryptoPOSAdmin,
+  getCryptoPOSAdminAuthStatus,
+  logoutCryptoPOSAdmin,
+  setPOSAdminSessionFlag,
+} from "@/lib/posAdminApi";
 
 const AuthContext = createContext(null);
 
@@ -48,13 +54,31 @@ export const AuthProvider = ({ children }) => {
 
   const { toast } = useToast();
 
-  // Initialize from backend: refresh cookie first, then /me (avoids 401 on /me when logged out)
+  // Initialize: Omara user session (/me), else Crypto POS admin session (/api/admin/auth/status)
   useEffect(() => {
     let cancelled = false;
     const initAuth = async () => {
       try {
         const { user } = await bootstrapAuthSession();
         if (!cancelled) setSessionUser(user);
+        if (!user && !cancelled) {
+          try {
+            const st = await getCryptoPOSAdminAuthStatus();
+            if (st?.authenticated && st.admin) {
+              setSessionUser({
+                id: String(st.admin.id),
+                email: `${st.admin.username}@pos.local`,
+                role: "admin",
+                name: st.admin.username,
+                provider: "pos-admin",
+              });
+              setIsAdminAuthenticated(true);
+              setPOSAdminSessionFlag(true);
+            }
+          } catch {
+            // no Crypto POS admin cookie
+          }
+        }
       } catch {
         if (!cancelled) setSessionUser(null);
       } finally {
@@ -93,7 +117,12 @@ export const AuthProvider = ({ children }) => {
         email: sessionUser.email,
         name: sessionUser.name || sessionUser.email?.split('@')[0] || 'User',
         role: sessionUser.role || 'user',
-        authMethod: String(sessionUser.provider || 'email').includes('google') ? 'google' : 'email',
+        authMethod:
+          sessionUser.provider === 'pos-admin'
+            ? 'pos-admin'
+            : String(sessionUser.provider || 'email').includes('google')
+              ? 'google'
+              : 'email',
       };
       setCurrentUser(prev => {
         if (JSON.stringify(prev) !== JSON.stringify(mappedUser)) return mappedUser;
@@ -192,37 +221,64 @@ export const AuthProvider = ({ children }) => {
       return true;
   }, []);
 
-  const adminLogin = useCallback(async (email, password) => {
-      if (email === 'admin@omara.com' && password === 'admin123') {
-          const adminUser = {
-              id: 'admin-id',
-              email,
-              role: 'admin',
-              name: 'Super Admin',
-              authMethod: 'email'
-          };
-          setCurrentUser(adminUser);
+  const adminLogin = useCallback(
+    async (emailOrUsername, password) => {
+      const raw = String(emailOrUsername || "").trim();
+      const username = raw.includes("@") ? raw.split("@")[0].trim() : raw;
+      if (!username || !password) {
+        toast({
+          title: "Missing credentials",
+          description: "Enter username (or email) and password.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      try {
+        const data = await loginCryptoPOSAdmin(username, password);
+        if (data?.success && data?.admin) {
+          setSessionUser({
+            id: String(data.admin.id),
+            email: `${data.admin.username}@pos.local`,
+            role: "admin",
+            name: data.admin.username,
+            provider: "pos-admin",
+          });
           setIsAdminAuthenticated(true);
+          setPOSAdminSessionFlag(true);
+          toast({ title: "Signed in", description: "Crypto POS admin session active." });
           return true;
+        }
+      } catch (err) {
+        const msg =
+          err?.response?.data?.error || err.message || "Invalid credentials";
+        toast({ title: msg, variant: "destructive" });
       }
       return false;
-  }, []);
+    },
+    [toast]
+  );
 
   const logout = useCallback(async () => {
     try {
       await logoutSession();
     } catch {
-      // no-op: proceed with local cleanup
+      // no-op
     }
+    try {
+      await logoutCryptoPOSAdmin();
+    } catch {
+      // no-op
+    }
+    setPOSAdminSessionFlag(false);
     if (isConnected) disconnect();
-    
+
     setSignatureVerified(false);
     setCurrentWalletAddress(null);
     setIsWalletAdmin(false);
     setCurrentUser(null);
     setSessionUser(null);
     setIsAdminAuthenticated(false);
-    
+
     window.location.href = "/login";
   }, [isConnected, disconnect]);
 

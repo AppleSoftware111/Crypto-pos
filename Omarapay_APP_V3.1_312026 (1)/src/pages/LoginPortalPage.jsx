@@ -27,7 +27,7 @@ const googleAuthEnabled = Boolean(import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID);
 
 const LoginPortalPage = ({ portalType = 'user' }) => {
   const navigate = useNavigate();
-  const { signatureVerified, isWalletAdmin, currentUser, login, loginWithGoogle } = useAuth();
+  const { signatureVerified, isWalletAdmin, currentUser, login, loginWithGoogle, adminLogin } = useAuth();
   const { toast } = useToast();
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [email, setEmail] = useState('');
@@ -77,6 +77,13 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
 
   useEffect(() => {
     if (portalType === 'admin') {
+      if (currentUser?.authMethod === 'pos-admin') {
+        setIsRedirecting(true);
+        const t = setTimeout(() => {
+          navigate(currentConfig.redirect, { replace: true });
+        }, 600);
+        return () => clearTimeout(t);
+      }
       if (signatureVerified && isConnected) {
         setIsRedirecting(true);
         const t = setTimeout(() => {
@@ -187,6 +194,71 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
                 <div className="flex justify-center py-2">
                   <ConnectButton />
                 </div>
+                {portalType === 'admin' && (
+                  <>
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-gray-200 dark:border-gray-700" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase text-muted-foreground">
+                        <span className="bg-white dark:bg-gray-950 px-2">Or Crypto POS admin</span>
+                      </div>
+                    </div>
+                    <form
+                      className="space-y-3"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!email.trim()) {
+                          toast({ title: 'Enter username or email', variant: 'destructive' });
+                          return;
+                        }
+                        if (!password.trim()) {
+                          toast({ title: 'Enter password', variant: 'destructive' });
+                          return;
+                        }
+                        setEmailLoading(true);
+                        try {
+                          const ok = await adminLogin(email.trim(), password);
+                          if (ok) {
+                            toast({ title: 'Welcome', description: 'Redirecting…' });
+                            navigate('/admin/dashboard', { replace: true });
+                          }
+                        } finally {
+                          setEmailLoading(false);
+                        }
+                      }}
+                    >
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-login-user">Username or email</Label>
+                        <Input
+                          id="admin-login-user"
+                          type="text"
+                          autoComplete="username"
+                          placeholder="admin"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="bg-white dark:bg-gray-900"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-login-pass">Password</Label>
+                        <Input
+                          id="admin-login-pass"
+                          type="password"
+                          autoComplete="current-password"
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="bg-white dark:bg-gray-900"
+                        />
+                      </div>
+                      <Button type="submit" className="w-full" disabled={emailLoading}>
+                        {emailLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Sign in (Crypto POS)
+                      </Button>
+                    </form>
+                  </>
+                )}
                 {(portalType === 'user' || portalType === 'register') && (
                   <>
                     <div className="relative">

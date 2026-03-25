@@ -86,16 +86,19 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// Session configuration
+// Session configuration (SESSION_CROSS_SITE=true for SPA on another origin + API on ngrok HTTPS)
+const sessionCrossSite = String(process.env.SESSION_CROSS_SITE || '').toLowerCase() === 'true';
 app.use(session({
     secret: process.env.SESSION_SECRET || 'crypto-pos-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true in production with HTTPS
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        ...(sessionCrossSite
+            ? { sameSite: 'none', secure: true }
+            : { secure: false, sameSite: 'lax' }),
+    },
 }));
 
 // Store active payment requests (in-memory for quick access, also stored in DB)

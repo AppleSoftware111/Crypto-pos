@@ -49,7 +49,18 @@ export const getPOSAdminPayments = (params = {}) =>
 export const getPOSReceipt = (paymentId) =>
   adminClient.get(`/api/receipt/${paymentId}`).then((r) => r.data);
 
-export const isPOSAdminConfigured = () => !!adminApiKey;
+const POS_ADMIN_SESSION_FLAG = 'omara_crypto_pos_admin';
+
+/** API key (server-to-server) or Crypto POS admin session (after /api/admin/login). */
+export const isPOSAdminConfigured = () =>
+  !!adminApiKey ||
+  (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(POS_ADMIN_SESSION_FLAG) === '1');
+
+export const setPOSAdminSessionFlag = (active) => {
+  if (typeof sessionStorage === 'undefined') return;
+  if (active) sessionStorage.setItem(POS_ADMIN_SESSION_FLAG, '1');
+  else sessionStorage.removeItem(POS_ADMIN_SESSION_FLAG);
+};
 
 // App users (Crypto POS user auth store)
 export const getAdminUsers = (params = {}) =>
@@ -66,5 +77,15 @@ export const updateAdminUser = (id, data) =>
 
 export const deactivateAdminUser = (id) =>
   adminClient.delete(`/api/admin/users/${encodeURIComponent(id)}`).then((r) => r.data);
+
+/** Crypto POS panel login (session cookie). Backend expects `username` + `password`. */
+export const loginCryptoPOSAdmin = (username, password) =>
+  adminClient.post('/api/admin/login', { username, password }).then((r) => r.data);
+
+export const getCryptoPOSAdminAuthStatus = () =>
+  adminClient.get('/api/admin/auth/status').then((r) => r.data);
+
+export const logoutCryptoPOSAdmin = () =>
+  adminClient.post('/api/admin/logout').then((r) => r.data);
 
 export default adminClient;
