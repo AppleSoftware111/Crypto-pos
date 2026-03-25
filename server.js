@@ -12,7 +12,24 @@ const authRoutes = require('./routes/auth');
 const { requireAuthHTML } = require('./middleware/auth');
 require('dotenv').config();
 
+/**
+ * Express `trust proxy`: required when the app runs behind ngrok, nginx, a load balancer, etc.
+ * so `req.ip` and express-rate-limit use `X-Forwarded-For` correctly (avoids ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
+ * Set TRUST_PROXY to the number of hops (usually 1). Omit or false when Node is exposed directly.
+ * @see https://expressjs.com/en/guide/behind-proxies.html
+ */
+function parseTrustProxy(raw) {
+    if (raw === undefined || raw === null) return false;
+    const s = String(raw).trim().toLowerCase();
+    if (s === '' || s === 'false' || s === '0' || s === 'no') return false;
+    if (s === 'true' || s === 'yes') return true;
+    const n = parseInt(s, 10);
+    if (!Number.isNaN(n) && n >= 0) return n;
+    return false;
+}
+
 const app = express();
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
 const PORT = process.env.PORT || 4000;
 
 // CORS: allow Omarapay dashboard and local dev
