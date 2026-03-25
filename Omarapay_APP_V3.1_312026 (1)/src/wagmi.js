@@ -20,7 +20,9 @@ import {
   tokenPocketWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 
-const projectId = 'a80c99f8d4de8e4268e0a133f009f001';
+/** Reown (WalletConnect Cloud). Add your Vercel origin at https://cloud.reown.com for this project. */
+const projectId =
+  import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || 'a80c99f8d4de8e4268e0a133f009f001';
 
 // Detect if user is on mobile device
 const isMobile = () => {

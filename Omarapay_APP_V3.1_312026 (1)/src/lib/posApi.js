@@ -1,10 +1,16 @@
 import axios from 'axios';
 import { getPOSApiBaseUrl } from '@/config/posConfig';
 
+const baseURL = getPOSApiBaseUrl();
+const defaultHeaders = { 'Content-Type': 'application/json' };
+if (String(baseURL).includes('ngrok')) {
+  defaultHeaders['ngrok-skip-browser-warning'] = 'true';
+}
+
 const posApi = axios.create({
-  baseURL: getPOSApiBaseUrl(),
+  baseURL,
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: defaultHeaders,
   withCredentials: false,
 });
 
