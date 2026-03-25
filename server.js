@@ -46,7 +46,19 @@ const corsOptions = {
         : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Token', 'X-Cashier-Token', 'X-Idempotency-Key', 'X-API-Key', 'ngrok-skip-browser-warning'],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'Accept',
+        'Origin',
+        'X-Requested-With',
+        'X-Company-Token',
+        'X-Cashier-Token',
+        'X-Idempotency-Key',
+        'X-API-Key',
+        'ngrok-skip-browser-warning',
+    ],
+    exposedHeaders: ['Content-Type'],
 };
 app.use(cors(corsOptions));
 

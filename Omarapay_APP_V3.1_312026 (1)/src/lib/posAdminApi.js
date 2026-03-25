@@ -6,14 +6,19 @@ import axios from 'axios';
 import { getPOSApiBaseUrl } from '@/config/posConfig';
 
 const adminApiKey = import.meta.env.VITE_POS_ADMIN_API_KEY || '';
+const baseURL = getPOSApiBaseUrl();
+const defaultHeaders = {
+  'Content-Type': 'application/json',
+  ...(adminApiKey ? { 'X-API-Key': adminApiKey } : {}),
+};
+if (String(baseURL).includes('ngrok')) {
+  defaultHeaders['ngrok-skip-browser-warning'] = 'true';
+}
 
 const adminClient = axios.create({
-  baseURL: getPOSApiBaseUrl(),
+  baseURL,
   timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json',
-    ...(adminApiKey ? { 'X-API-Key': adminApiKey } : {}),
-  },
+  headers: defaultHeaders,
   withCredentials: true,
 });
 

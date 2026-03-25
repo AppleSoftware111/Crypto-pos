@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omarapay-v1';
+const CACHE_NAME = 'omarapay-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -32,7 +32,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Strategy: Network First for API calls
+  // Do not intercept cross-origin requests (e.g. Crypto POS API on ngrok). Intercepting can break CORS
+  // when the offline fallback returns a Response without Access-Control-Allow-Origin.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // Strategy: Network First for same-origin API calls only
   if (url.pathname.startsWith('/api/') || url.pathname.includes('supabase')) {
     event.respondWith(
       fetch(event.request)
