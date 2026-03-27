@@ -16,6 +16,10 @@ const posApi = axios.create({
 
 // Request interceptor: add POS tokens if present
 posApi.interceptors.request.use((config) => {
+  config.headers = config.headers || {};
+  if (String(baseURL).includes('ngrok')) {
+    config.headers['ngrok-skip-browser-warning'] = 'true';
+  }
   const companyToken = typeof window !== 'undefined' && window.__POS_COMPANY_TOKEN__;
   const cashierToken = typeof window !== 'undefined' && window.__POS_CASHIER_TOKEN__;
   if (companyToken) config.headers['X-Company-Token'] = companyToken;
@@ -45,9 +49,7 @@ export const getCryptoRate = (methodCode, amount = 100) =>
 export const getReceipt = (paymentId) => posApi.get(`/api/receipt/${paymentId}`).then((r) => r.data);
 export const companyLogin = (password) => posApi.post('/api/pos/company/login', { password }).then((r) => r.data);
 export const getCashiers = (companyId) =>
-  posApi.get(`/api/pos/company/${companyId}/cashiers`, {
-    headers: { 'X-Company-Token': window.__POS_COMPANY_TOKEN__ },
-  }).then((r) => r.data.cashiers || []);
+  posApi.get(`/api/pos/company/${companyId}/cashiers`).then((r) => r.data.cashiers || []);
 export const cashierLogin = (companyId, cashierId, password) =>
   posApi.post('/api/pos/cashier/login', { companyId, cashierId, password }).then((r) => r.data);
 export const posAuthStatus = () => posApi.get('/api/pos/auth/status').then((r) => r.data);
