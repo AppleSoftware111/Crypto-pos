@@ -1,5 +1,7 @@
 # Crypto POS - Production-Ready Point of Sale System
 
+**Omara web dashboard (React/Vite):** build and deploy from [`Omarapay_APP_V3.1_312026 (1)/`](./Omarapay_APP_V3.1_312026%20(1)/). See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for how this repo’s pieces fit together.
+
 A production-ready Point of Sale system for accepting cryptocurrency payments. Supports **USDT on Avalanche** and **Bitcoin (BTC)** with real blockchain monitoring.
 
 ## Features

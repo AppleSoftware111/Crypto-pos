@@ -25,6 +25,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 
 const MerchantDashboardPage = () => {
     const { analytics, transactions, loading, isModeDemo } = useMerchant();
@@ -83,6 +85,32 @@ const MerchantDashboardPage = () => {
                     </Badge>
                 )}
             </div>
+
+            {POS_ENABLED && (
+                <Alert className="border-blue-200 bg-blue-50/80 dark:bg-blue-950/30 dark:border-blue-900">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertTitle className="text-blue-900 dark:text-blue-100">Staff / cashier checkout</AlertTitle>
+                    <AlertDescription className="text-blue-900/90 dark:text-blue-100/90">
+                        In-store staff use the POS flow (company password, then cashier password). Open{' '}
+                        <button
+                            type="button"
+                            className="font-medium underline underline-offset-2"
+                            onClick={() => navigate('/merchant/pos')}
+                        >
+                            Accept Payments
+                        </button>
+                        , the dedicated{' '}
+                        <button
+                            type="button"
+                            className="font-medium underline underline-offset-2"
+                            onClick={() => navigate('/merchant/cashier')}
+                        >
+                            Cashier terminal
+                        </button>
+                        , or bookmark <code className="text-xs">/merchant/pos?kiosk=1</code> for a compact toolbar.
+                    </AlertDescription>
+                </Alert>
+            )}
 
             {/* Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-tour="dashboard-stats">

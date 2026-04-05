@@ -1,84 +1,94 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Check, Shield, User, Briefcase, PlusCircle, Settings } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { Shield, Store, Briefcase } from 'lucide-react';
 
+/**
+ * Read-only overview of how access is split in this app (not a live RBAC matrix).
+ */
 const AdminRolesPage = () => {
-    const { toast } = useToast();
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Roles &amp; access</h1>
+        <p className="text-muted-foreground">
+          How Super Admin, merchant, and cashier flows fit together in Omara.
+        </p>
+      </div>
 
-    const roles = [
-        { name: 'Super Admin', description: 'Full access to the entire system.', users: 1, icon: <Shield /> },
-        { name: 'Master Franchise', description: 'Manages a group of merchants.', users: 5, icon: <Briefcase /> },
-        { name: 'Merchant', description: 'Standard user for business transactions.', users: 150, icon: <User /> },
-        { name: 'Affiliate', description: 'Manages referral links and commissions.', users: 30, icon: <User /> },
-        { name: 'Normal User', description: 'Customer-level account.', users: 2500, icon: <User /> },
-    ];
-    
-    const handleAction = () => {
-        toast({
-          title: "🚧 Feature in Progress",
-          description: "This functionality is coming soon!",
-        });
-    };
-
-    return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold">Role Management</h1>
-                    <p className="text-muted-foreground">Define and manage user roles and their permissions.</p>
-                </div>
-                <Button onClick={handleAction}><PlusCircle className="mr-2 h-4 w-4" /> Create New Role</Button>
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Super Admin (main office)</CardTitle>
             </div>
+            <CardDescription>
+              Full platform console at <code className="text-xs">/admin</code>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              Connect a wallet on the admin whitelist and verify your signature. This is separate from the merchant
+              storefront.
+            </p>
+            <p>
+              Optionally, <strong>Crypto POS admin</strong> (username/password) signs in on the same admin login page to
+              manage POS Coins and POS Payments via the POS API — it does not replace main-office wallet policy.
+            </p>
+          </CardContent>
+        </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Predefined Roles</CardTitle>
-                    <CardDescription>System roles with their assigned user counts.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Role Name</TableHead>
-                                <TableHead>Description</TableHead>
-                                <TableHead>Users</TableHead>
-                                <TableHead>Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {roles.map((role) => (
-                                <TableRow key={role.name}>
-                                    <TableCell className="font-medium flex items-center">
-                                        <span className="mr-2">{role.icon}</span>{role.name}
-                                    </TableCell>
-                                    <TableCell>{role.description}</TableCell>
-                                    <TableCell>{role.users}</TableCell>
-                                    <TableCell>
-                                        <Button variant="outline" size="sm" onClick={handleAction}>
-                                            <Settings className="mr-2 h-4 w-4" /> View Permissions
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Merchant</CardTitle>
+            </div>
+            <CardDescription>Business back office</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              Approved businesses use <code className="text-xs">/merchant/*</code> for dashboard, transactions,
+              settings, and reports.
+            </p>
+            <p>
+              <Link to="/merchant/dashboard" className="text-primary underline-offset-4 hover:underline">
+                Open merchant dashboard
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Permission Matrix Editor</CardTitle>
-                    <CardDescription>A detailed interface to define granular permissions for each role. (Coming soon)</CardDescription>
-                </CardHeader>
-                <CardContent className="text-center text-muted-foreground">
-                    <p>The permission matrix will allow you to assign specific actions (e.g., "view reports", "edit products") to each role.</p>
-                </CardContent>
-            </Card>
-        </div>
-    );
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Store className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Cashier / staff</CardTitle>
+            </div>
+            <CardDescription>In-store checkout</CardDescription>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              There is no separate &quot;cashier admin&quot; product. Staff use the POS flow: company login, then cashier
+              login, then take payment.
+            </p>
+            <p>
+              <Link to="/merchant/cashier" className="text-primary underline-offset-4 hover:underline">
+                Cashier terminal
+              </Link>
+              {' · '}
+              <Link to="/merchant/pos" className="text-primary underline-offset-4 hover:underline">
+                Accept Payments
+              </Link>
+              {' '}
+              (add <code className="text-xs">?kiosk=1</code> for kiosk toolbar on the same page)
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 };
 
 export default AdminRolesPage;

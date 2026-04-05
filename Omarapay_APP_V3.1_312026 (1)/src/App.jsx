@@ -54,6 +54,7 @@ import AdminRemittanceControlPage from '@/pages/admin/balance/AdminRemittanceCon
 import AdminCurrencyLiquidityPage from '@/pages/admin/balance/AdminCurrencyLiquidityPage';
 import AdminComplianceRiskPage from '@/pages/admin/balance/AdminComplianceRiskPage';
 import AdminAnalyticsReportingPage from '@/pages/admin/balance/AdminAnalyticsReportingPage';
+import AdminRolesPage from '@/pages/admin/AdminRolesPage';
 
 // Contexts
 import { AuthProvider } from '@/context/AuthContext';
@@ -137,8 +138,10 @@ function App() {
 
             {/* --- Merchant Routes --- */}
             <Route element={<MerchantWrapper />}>
+                <Route path="/cashier" element={<Navigate to="/merchant/cashier" replace />} />
                 <Route path="/merchant/dashboard" element={<MerchantDashboardPage />} />
                 <Route path="/merchant/pos" element={<POSFlowPage />} />
+                <Route path="/merchant/cashier" element={<POSFlowPage />} />
                 <Route path="/merchant/pos-settings" element={<BusinessPOSCoinsPage />} />
                 <Route path="/merchant/transactions" element={<TransactionsPage />} />
                 <Route path="/merchant/payouts" element={<PayoutsPage />} />
@@ -167,6 +170,7 @@ function App() {
                 <Route path="/admin/compliance" element={<AdminComplianceRiskPage />} />
                 <Route path="/admin/analytics" element={<AdminAnalyticsReportingPage />} />
                 <Route path="/admin/settings" element={<AdminSettings />} />
+                <Route path="/admin/roles" element={<AdminRolesPage />} />
                 <Route path="/admin/approvals" element={<AdminBusinessApprovalPage />} />
                 <Route path="/admin/payment-providers" element={<AdminPaymentProvidersPage />} />
                 <Route path="/admin/pos-coins" element={<AdminPOSCoinsPage />} />

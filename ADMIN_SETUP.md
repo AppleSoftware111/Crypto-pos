@@ -192,3 +192,12 @@ All configuration is now managed through the admin panel:
 
 The admin management system is fully functional and ready for production use. All features requested by the client have been implemented professionally.
 
+## Omara web app (Vite) — Super Admin wallet whitelist
+
+The React dashboard in `Omarapay_APP_V3.1_312026 (1)/` grants **Super Admin** access to `/admin/*` when the connected wallet address is on the whitelist.
+
+- **Build-time env:** set `VITE_ADMIN_WALLETS` to a comma-separated list of EVM addresses (same values you would previously edit in `src/config/adminConfig.js`). If unset, the app uses the fallback list in code.
+- **Crypto POS admin (password):** separate session via `/api/admin/login` on the POS backend; used for POS Coins / POS Payments API operations. It does not replace the main-office wallet policy for full platform control.
+
+See also [`DEPLOYMENT.md`](DEPLOYMENT.md) in the repository root.
+

@@ -8,6 +8,7 @@ import * as posApi from '@/lib/posApi';
 import { getPOSApiBaseUrl } from '@/config/posConfig';
 import { CARD_METHODS, isCardMethod } from '@/config/posPaymentMethods';
 import { CreditCard, Loader2, LogOut, CheckCircle, Copy, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const POLL_INTERVAL_MS = 2000;
@@ -29,6 +30,29 @@ function luhnCheck(cardNumber) {
   return sum % 10 === 0;
 }
 
+function KioskToolbar({ enabled }) {
+  const navigate = useNavigate();
+  if (!enabled) return null;
+  const toggleFullscreen = () => {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) el.requestFullscreen?.().catch(() => {});
+    else document.exitFullscreen?.().catch(() => {});
+  };
+  return (
+    <div className="mb-4 flex flex-wrap gap-2 items-center justify-between rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm">
+      <span className="text-muted-foreground">Staff / cashier terminal — bookmark this page for in-store checkout</span>
+      <div className="flex gap-2 shrink-0">
+        <Button type="button" variant="outline" size="sm" onClick={toggleFullscreen}>
+          Fullscreen
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => navigate('/merchant/dashboard')}>
+          Merchant home
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function parseExpiry(expiryStr) {
   const parts = String(expiryStr).trim().split(/\/|\s/).filter(Boolean);
   if (parts.length < 2) return null;
@@ -38,7 +62,7 @@ function parseExpiry(expiryStr) {
   return { month, year: yearPart };
 }
 
-export default function POSFlow() {
+export default function POSFlow({ kiosk = false }) {
   const { toast } = useToast();
   const [step, setStep] = useState('auth');
   const [loading, setLoading] = useState(true);
@@ -280,18 +304,23 @@ export default function POSFlow() {
 
   if (loading && step === 'methods' && coins.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-          <p className="text-muted-foreground">Loading payment methods...</p>
-        </CardContent>
-      </Card>
+      <>
+        <KioskToolbar enabled={kiosk} />
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Loading payment methods...</p>
+          </CardContent>
+        </Card>
+      </>
     );
   }
 
   if (step === 'auth') {
     return (
-      <Card>
+      <>
+        <KioskToolbar enabled={kiosk} />
+        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
@@ -371,12 +400,15 @@ export default function POSFlow() {
           )}
         </CardContent>
       </Card>
+      </>
     );
   }
 
   if (step === 'methods') {
     return (
-      <Card>
+      <>
+        <KioskToolbar enabled={kiosk} />
+        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Select payment method</CardTitle>
@@ -433,6 +465,7 @@ export default function POSFlow() {
           )}
         </CardContent>
       </Card>
+      </>
     );
   }
 
@@ -441,7 +474,9 @@ export default function POSFlow() {
     const cryptoAmount = cryptoRate ? usdAmount / (cryptoRate.usdRate || 1) : null;
     const isCard = isCardMethod(selectedMethod);
     return (
-      <Card>
+      <>
+        <KioskToolbar enabled={kiosk} />
+        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Enter amount</CardTitle>
@@ -501,6 +536,7 @@ export default function POSFlow() {
           )}
         </CardContent>
       </Card>
+      </>
     );
   }
 
@@ -513,7 +549,9 @@ export default function POSFlow() {
       return `${d.slice(0, 2)}/${d.slice(2)}`;
     };
     return (
-      <Card>
+      <>
+        <KioskToolbar enabled={kiosk} />
+        <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Card payment</CardTitle>
@@ -590,6 +628,7 @@ export default function POSFlow() {
           </form>
         </CardContent>
       </Card>
+      </>
     );
   }
 
@@ -607,7 +646,9 @@ export default function POSFlow() {
       }
     };
     return (
-      <Card>
+      <>
+        <KioskToolbar enabled={kiosk} />
+        <Card>
         <CardHeader>
           <CardTitle>Pay {payment.amount} {payment.symbol || selectedMethod?.symbol}</CardTitle>
           <CardDescription>Customer should send the exact amount to the address below.</CardDescription>
@@ -639,13 +680,16 @@ export default function POSFlow() {
           </Button>
         </CardContent>
       </Card>
+      </>
     );
   }
 
   if (step === 'success') {
     const isCard = payment?.approved || (payment?.method && ['visa', 'mastercard', 'unionpay'].includes(String(payment.method).toLowerCase()));
     return (
-      <Card>
+      <>
+        <KioskToolbar enabled={kiosk} />
+        <Card>
         <CardContent className="pt-8 pb-8 flex flex-col items-center text-center">
           <CheckCircle className="h-16 w-16 text-green-600 mb-4" />
           <CardTitle className="mb-2">{isCard ? 'Card payment approved' : 'Payment received'}</CardTitle>
@@ -670,6 +714,7 @@ export default function POSFlow() {
           </Button>
         </CardContent>
       </Card>
+      </>
     );
   }
 

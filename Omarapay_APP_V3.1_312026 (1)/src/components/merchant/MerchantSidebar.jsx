@@ -16,7 +16,8 @@ import {
     Wallet,
     Fingerprint,
     Receipt,
-    Coins
+    Coins,
+    Store
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ const MerchantSidebar = ({ mobileOpen, setMobileOpen }) => {
     const posItems = POS_ENABLED
         ? [
             { name: 'Accept Payments (POS)', path: '/merchant/pos', icon: Receipt, tourId: 'nav-pos' },
+            { name: 'Cashier terminal', path: '/merchant/cashier', icon: Store, tourId: 'nav-cashier' },
             { name: 'POS Settings', path: '/merchant/pos-settings', icon: Coins, tourId: 'nav-pos-settings' },
           ]
         : [];

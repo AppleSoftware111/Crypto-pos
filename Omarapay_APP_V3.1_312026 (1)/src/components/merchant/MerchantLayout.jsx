@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useBusiness } from '@/context/BusinessContext';
 import { useMerchant } from '@/context/MerchantContext';
@@ -29,7 +29,13 @@ const MerchantLayout = () => {
     
     const navigate = useNavigate();
     const location = useLocation();
+    const [searchParams] = useSearchParams();
     const [mobileOpen, setMobileOpen] = useState(false);
+
+    const kioskOnPos =
+        location.pathname === '/merchant/pos' && searchParams.get('kiosk') === '1';
+    const isCashierTerminal =
+        location.pathname === '/merchant/cashier' || kioskOnPos;
     
     // Walkthrough State
     const [isWalkthroughActive, setIsWalkthroughActive] = useState(false);
@@ -99,6 +105,25 @@ const MerchantLayout = () => {
                         Back to Wallet
                     </Button>
                 </div>
+            </div>
+        );
+    }
+
+    if (isCashierTerminal) {
+        return (
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+                <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b bg-white dark:bg-gray-900 px-4 shadow-sm">
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/merchant/dashboard')}>
+                        Merchant dashboard
+                    </Button>
+                    <div className="flex items-center gap-3">
+                        <ModeToggle />
+                        <span className="text-xs text-muted-foreground hidden sm:inline">Staff / cashier</span>
+                    </div>
+                </header>
+                <main className="flex-1 overflow-x-hidden">
+                    <Outlet />
+                </main>
             </div>
         );
     }

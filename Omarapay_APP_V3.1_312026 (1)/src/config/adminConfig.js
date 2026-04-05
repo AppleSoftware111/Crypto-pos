@@ -12,26 +12,34 @@ import {
   CreditCard,
   Coins,
   Receipt,
-  Users
+  Users,
+  Shield
 } from 'lucide-react';
 
 // ==============================================================================
 // SENSITIVE CONFIGURATION - ADMIN WHITELIST
 // ==============================================================================
-// This configuration file defines the strict whitelist for Super Admin access.
-// ONLY wallets listed here will be granted access to /admin/* routes.
-// 
-// PRIMARY ADMIN WALLET: 0xf256DE1D126061166c24905a91F7312c84623C60
+// Super Admin (wallet) access to /admin/* when the address is whitelisted.
+// Set VITE_ADMIN_WALLETS at build time (comma-separated, no spaces required).
+// If unset, FALLBACK_ADMIN_WALLETS below is used.
+// PRIMARY ADMIN WALLET (reference): 0xf256DE1D126061166c24905a91F7312c84623C60
 // ==============================================================================
 
 export const ADMIN_WALLET_ADDRESS = '0xf256DE1D126061166c24905a91F7312c84623C60';
 
-export const ADMIN_WALLETS = [
-  // ADMIN_WALLET_ADDRESS,
+function parseAdminWalletsFromEnv() {
+  const raw = import.meta.env.VITE_ADMIN_WALLETS;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length ? list : null;
+}
+
+const FALLBACK_ADMIN_WALLETS = [
   '0xbc048634fCbB6E0c4Db3FFd9B3487B94508BBd65',
   '0x1f27F54EEe0DB3D515A4600138e41234e2d32917',
-  // Future admin wallets can be appended here securely
 ];
+
+export const ADMIN_WALLETS = parseAdminWalletsFromEnv() ?? FALLBACK_ADMIN_WALLETS;
 
 /**
  * Verifies if a given address is in the admin whitelist.
@@ -85,6 +93,7 @@ export const adminMenuStructure = [
   {
     title: 'System',
     items: [
+      { name: 'Roles & access', path: '/admin/roles', icon: Shield },
       { name: 'User Management', path: '/admin/users', icon: Users },
       { name: 'Settings & Admins', path: '/admin/settings', icon: Settings },
     ]

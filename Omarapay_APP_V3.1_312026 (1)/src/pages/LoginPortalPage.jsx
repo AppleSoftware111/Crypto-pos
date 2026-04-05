@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShieldCheck, ChevronRight, LogOut, Copy, Loader2, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, ChevronRight, LogOut, Copy, Loader2, ArrowLeft, Info } from 'lucide-react';
 
 import {
   Card,
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 import { useAuth } from '@/context/AuthContext';
 import SignatureVerification from '@/components/auth/SignatureVerification';
@@ -46,8 +47,8 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
         badge: null
     },
     admin: {
-        title: "Admin Portal",
-        description: "Restricted access for authorized administrators",
+        title: "Super Admin & POS",
+        description: "Main office: whitelisted wallet + verification. Below: Crypto POS backend admin (coins & payments API).",
         redirect: "/admin/dashboard",
         badge: "Authorized Access Only"
     },
@@ -191,6 +192,23 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
           <CardContent className="space-y-4">
             {!isConnected ? (
               <div className="space-y-4">
+                {portalType === 'admin' && (
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>Two ways to sign in</AlertTitle>
+                    <AlertDescription className="space-y-2">
+                      <p>
+                        <strong>Super Admin (main office):</strong> connect a wallet on the platform whitelist, then
+                        complete verification. Merchant storefront accounts cannot open this console without a listed
+                        wallet.
+                      </p>
+                      <p>
+                        <strong>Crypto POS admin:</strong> username and password for the POS backend — used for POS
+                        Coins and POS payment records. This is not the merchant dashboard.
+                      </p>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="flex justify-center py-2">
                   <ConnectButton />
                 </div>
@@ -201,7 +219,7 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
                         <span className="w-full border-t border-gray-200 dark:border-gray-700" />
                       </div>
                       <div className="relative flex justify-center text-xs uppercase text-muted-foreground">
-                        <span className="bg-white dark:bg-gray-950 px-2">Or Crypto POS admin</span>
+                        <span className="bg-white dark:bg-gray-950 px-2">Or Crypto POS backend admin</span>
                       </div>
                     </div>
                     <form
@@ -254,7 +272,7 @@ const LoginPortalPage = ({ portalType = 'user' }) => {
                       </div>
                       <Button type="submit" className="w-full" disabled={emailLoading}>
                         {emailLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Sign in (Crypto POS)
+                        Sign in (POS API admin)
                       </Button>
                     </form>
                   </>

@@ -1,6 +1,7 @@
 /**
  * Admin API client for Crypto POS backend.
  * Used by Omarapay admin pages (POS Coins, POS Payments).
+ * Optional integration modules: see `POS_CLIENT_MODULES_ENABLED` in `@/config/posConfig`.
  */
 import axios from 'axios';
 import { getPOSApiBaseUrl } from '@/config/posConfig';
