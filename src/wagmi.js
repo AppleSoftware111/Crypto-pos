@@ -65,6 +65,13 @@ const connectors = connectorsForWallets(
   }
 );
 
+/** Explicit RPC URLs — avoid viem defaults (e.g. merkle.io) that block browser CORS on Vercel. */
+function pickRpc(envName, fallback) {
+  const v = import.meta.env[envName];
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  return fallback;
+}
+
 export const config = createConfig({
   connectors,
   chains: [
@@ -78,12 +85,12 @@ export const config = createConfig({
   ],
   ssr: false,
   transports: {
-    [avalanche.id]: http('https://api.avax.network/ext/bc/C/rpc'),
-    [avalancheFuji.id]: http('https://api.avax-test.network/ext/bc/C/rpc'),
-    [mainnet.id]: http(),
-    [polygon.id]: http(),
-    [arbitrum.id]: http(),
-    [optimism.id]: http(),
-    [base.id]: http(),
+    [avalanche.id]: http(pickRpc('VITE_RPC_AVALANCHE', 'https://api.avax.network/ext/bc/C/rpc')),
+    [avalancheFuji.id]: http(pickRpc('VITE_RPC_AVALANCHE_FUJI', 'https://api.avax-test.network/ext/bc/C/rpc')),
+    [mainnet.id]: http(pickRpc('VITE_RPC_MAINNET', 'https://cloudflare-eth.com')),
+    [polygon.id]: http(pickRpc('VITE_RPC_POLYGON', 'https://polygon-rpc.com')),
+    [arbitrum.id]: http(pickRpc('VITE_RPC_ARBITRUM', 'https://arb1.arbitrum.io/rpc')),
+    [optimism.id]: http(pickRpc('VITE_RPC_OPTIMISM', 'https://mainnet.optimism.io')),
+    [base.id]: http(pickRpc('VITE_RPC_BASE', 'https://mainnet.base.org')),
   },
 });

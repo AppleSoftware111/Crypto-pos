@@ -70,13 +70,17 @@ app.use((req, res, next) => {
     next();
 });
 
-// Rate limiting: 200 requests per 15 min per IP for API
+// Rate limiting: 200 requests per 15 min per IP for API (payment status polling is excluded — high frequency by design)
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 200,
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => {
+        const url = req.originalUrl || req.url || '';
+        return url.includes('/api/payment/status');
+    },
 });
 app.use('/api/', apiLimiter);
 
