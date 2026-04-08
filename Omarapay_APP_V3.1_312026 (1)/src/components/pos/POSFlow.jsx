@@ -5,6 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import * as posApi from '@/lib/posApi';
+import {
+  persistPosCompanyToken,
+  persistPosCashierToken,
+  persistPosCompanySnapshot,
+  clearPersistedPosSession,
+} from '@/lib/posSessionStorage';
 import { getPOSApiBaseUrl } from '@/config/posConfig';
 import { CARD_METHODS, isCardMethod } from '@/config/posPaymentMethods';
 import { CreditCard, Loader2, LogOut, CheckCircle, Copy, AlertCircle } from 'lucide-react';
@@ -85,6 +91,9 @@ export default function POSFlow({ kiosk = false }) {
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [cardholderName, setCardholderName] = useState('');
+  /** Fetched with fetch()+blob so ngrok can receive ngrok-skip-browser-warning (plain <img src> cannot). */
+  const [qrImageObjectUrl, setQrImageObjectUrl] = useState(null);
+  const [qrImageError, setQrImageError] = useState(false);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -114,7 +123,8 @@ export default function POSFlow({ kiosk = false }) {
     try {
       const data = await posApi.companyLogin(companyPassword);
       if (data.token) {
-        if (typeof window !== 'undefined') window.__POS_COMPANY_TOKEN__ = data.token;
+        persistPosCompanyToken(data.token);
+        persistPosCompanySnapshot(data.company);
         setCompany(data.company);
         const list = await posApi.getCashiers(data.company.id);
         setCashiers(list);
@@ -136,7 +146,7 @@ export default function POSFlow({ kiosk = false }) {
     try {
       const data = await posApi.cashierLogin(company.id, selectedCashier.id, cashierPassword);
       if (data.token) {
-        if (typeof window !== 'undefined') window.__POS_CASHIER_TOKEN__ = data.token;
+        persistPosCashierToken(data.token);
         setCashierPassword('');
         setStep('methods');
         loadCoins();
@@ -166,10 +176,7 @@ export default function POSFlow({ kiosk = false }) {
     try {
       await posApi.posLogout();
     } catch (_) {}
-    if (typeof window !== 'undefined') {
-      window.__POS_COMPANY_TOKEN__ = null;
-      window.__POS_CASHIER_TOKEN__ = null;
-    }
+    clearPersistedPosSession();
     setCompany(null);
     setCashiers([]);
     setSelectedCashier(null);
@@ -283,6 +290,54 @@ export default function POSFlow({ kiosk = false }) {
     return () => clearInterval(id);
   }, [step, payment?.paymentId]);
 
+  useEffect(() => {
+    if (step !== 'display' || !payment?.qrData) {
+      setQrImageObjectUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setQrImageError(false);
+      return undefined;
+    }
+
+    const apiBase = getPOSApiBaseUrl().replace(/\/$/, '');
+    const qrUrl = `${apiBase}/api/qrcode/${encodeURIComponent(payment.qrData)}`;
+    const headers = {};
+    if (qrUrl.includes('ngrok')) {
+      headers['ngrok-skip-browser-warning'] = 'true';
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch(qrUrl, { mode: 'cors', credentials: 'omit', headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (!blob.type.startsWith('image/')) throw new Error('Not an image');
+        if (cancelled) return;
+        const objUrl = URL.createObjectURL(blob);
+        setQrImageObjectUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return objUrl;
+        });
+        setQrImageError(false);
+      } catch {
+        if (!cancelled) {
+          setQrImageError(true);
+          setQrImageObjectUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [step, payment?.qrData, payment?.paymentId]);
+
   const copyAddress = () => {
     if (payment?.address) {
       navigator.clipboard.writeText(payment.address);
@@ -360,6 +415,9 @@ export default function POSFlow({ kiosk = false }) {
           ) : (
             <>
               <p className="text-sm text-muted-foreground">Logged in as <strong>{company.name}</strong>. Select cashier:</p>
+              {cashiers.length === 1 && (
+                <p className="text-xs text-muted-foreground">One cashier terminal is configured for this company. Add more in the Crypto POS admin API if needed.</p>
+              )}
               <div className="space-y-2">
                 {cashiers.map((c) => (
                   <Button
@@ -663,12 +721,26 @@ export default function POSFlow({ kiosk = false }) {
             </div>
           )}
           {payment.qrData && (
-            <div className="flex justify-center p-4 bg-white rounded-lg border">
-              <img
-                src={`${baseUrl}/api/qrcode/${encodeURIComponent(payment.qrData)}`}
-                alt="Payment QR"
-                className="w-48 h-48 object-contain"
-              />
+            <div className="flex flex-col items-center justify-center gap-2 p-4 bg-white rounded-lg border min-h-[12rem]">
+              {qrImageError && (
+                <div className="text-center text-sm text-muted-foreground space-y-2">
+                  <p>Could not load QR in this page (tunnel / browser restriction).</p>
+                  <a
+                    href={`${baseUrl.replace(/\/$/, '')}/api/qrcode/${encodeURIComponent(payment.qrData)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline font-medium"
+                  >
+                    Open QR image in new tab
+                  </a>
+                </div>
+              )}
+              {!qrImageError && qrImageObjectUrl && (
+                <img src={qrImageObjectUrl} alt="Payment QR" className="w-48 h-48 object-contain" />
+              )}
+              {!qrImageError && !qrImageObjectUrl && (
+                <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+              )}
             </div>
           )}
           <p className="text-sm text-muted-foreground text-center">

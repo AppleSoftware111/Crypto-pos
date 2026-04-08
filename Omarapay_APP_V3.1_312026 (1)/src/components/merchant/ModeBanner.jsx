@@ -19,7 +19,9 @@ const ModeBanner = ({ className, onStartWalkthrough }) => {
                     </div>
                     <div>
                         <p className="text-sm font-medium text-red-900">Live Mode Active</p>
-                        <p className="text-xs text-red-700 hidden sm:block">All transactions are real and will involve actual fund transfers.</p>
+                        <p className="text-xs text-red-700 hidden sm:block">
+                            All transactions are real and will involve actual fund transfers. Dashboard charts use POS data when you have a POS session or linked account.
+                        </p>
                     </div>
                 </div>
                 <Button 

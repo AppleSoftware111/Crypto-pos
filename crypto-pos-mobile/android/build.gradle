@@ -38,3 +38,16 @@ allprojects {
         maven { url 'https://www.jitpack.io' }
     }
 }
+
+// Windows only: single-job native compile — avoids ninja "Permission denied" on .d depfiles (Defender / indexer).
+if (System.getProperty('os.name', '').toLowerCase().contains('windows')) {
+    subprojects { sub ->
+        sub.afterEvaluate {
+            if (sub.name == 'expo-modules-core') {
+                sub.android.defaultConfig.externalNativeBuild.cmake {
+                    arguments '-DCMAKE_BUILD_PARALLEL_LEVEL=1'
+                }
+            }
+        }
+    }
+}

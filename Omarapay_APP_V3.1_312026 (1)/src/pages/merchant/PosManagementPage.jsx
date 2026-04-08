@@ -1,107 +1,142 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { PlusCircle, MapPin, KeyRound } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { Loader2, Store } from 'lucide-react';
+import { getCashiers } from '@/lib/posApi';
+import { getPersistedPosCompanySnapshot } from '@/lib/posSessionStorage';
+import { getPOSApiBaseUrl } from '@/config/posConfig';
 
 const PosManagementPage = () => {
-    const { toast } = useToast();
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [companyLabel, setCompanyLabel] = useState(null);
 
-    const posMachines = [
-        { id: 'POS-001', location: 'Main Counter', status: 'Online', salesToday: '$1,250.75' },
-        { id: 'POS-002', location: 'Drive-Thru', status: 'Online', salesToday: '$875.50' },
-        { id: 'POS-003', location: 'Upstairs Cafe', status: 'Offline', salesToday: '$0.00' },
-    ];
+    const load = useCallback(async () => {
+        const snap = getPersistedPosCompanySnapshot();
+        if (!snap?.id) {
+            setRows([]);
+            setCompanyLabel(null);
+            setError(null);
+            setLoading(false);
+            return;
+        }
+        setCompanyLabel(snap.name || snap.id);
+        setLoading(true);
+        setError(null);
+        try {
+            const list = await getCashiers(snap.id);
+            setRows(Array.isArray(list) ? list : []);
+        } catch (e) {
+            setError(e.response?.data?.error || e.message || 'Could not load cashiers');
+            setRows([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-    const handleAction = (feature) => {
-        toast({
-            title: "🚧 Feature in Progress",
-            description: `${feature} will be available soon!`,
-        });
-    };
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const hasSnapshot = !!getPersistedPosCompanySnapshot()?.id;
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
                 <div>
                     <h1 className="text-3xl font-bold">POS Management</h1>
-                    <p className="text-muted-foreground">Configure and monitor your Point-of-Sale terminals.</p>
+                    <p className="text-muted-foreground">
+                        Cashier terminals from your Crypto POS backend (same list as the cashier login screen).
+                    </p>
                 </div>
-                <Button onClick={() => handleAction('Registering new POS hardware')}><PlusCircle className="mr-2 h-4 w-4" /> Register POS Hardware</Button>
+                <Button variant="outline" asChild>
+                    <Link to="/merchant/cashier">
+                        <Store className="mr-2 h-4 w-4" />
+                        Open cashier terminal
+                    </Link>
+                </Button>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Monitor Sales per Machine</CardTitle>
+                    <CardTitle>Cashier terminals</CardTitle>
+                    <CardDescription>
+                        API: {getPOSApiBaseUrl()}
+                        {companyLabel ? ` · Company: ${companyLabel}` : ''}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Machine ID</TableHead>
-                                <TableHead>Location</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Sales Today</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {posMachines.map((machine) => (
-                                <TableRow key={machine.id}>
-                                    <TableCell className="font-mono">{machine.id}</TableCell>
-                                    <TableCell>{machine.location}</TableCell>
-                                    <TableCell>
-                                        <Badge variant={machine.status === 'Online' ? 'success' : 'destructive'}>{machine.status}</Badge>
-                                    </TableCell>
-                                    <TableCell>{machine.salesToday}</TableCell>
+                    {loading ? (
+                        <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            Loading terminals…
+                        </div>
+                    ) : error ? (
+                        <p className="text-sm text-destructive">{error}</p>
+                    ) : !hasSnapshot ? (
+                        <div className="rounded-lg border border-dashed p-6 text-center space-y-3">
+                            <p className="text-sm text-muted-foreground">
+                                No POS session in this browser yet. Sign in once on the cashier terminal so we can list your terminals and keep merchant analytics in sync.
+                            </p>
+                            <Button asChild>
+                                <Link to="/merchant/cashier">Go to cashier terminal</Link>
+                            </Button>
+                        </div>
+                    ) : rows.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4">No cashier terminals returned for this company.</p>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Terminal ID</TableHead>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Last login</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {rows.map((c) => (
+                                    <TableRow key={c.id}>
+                                        <TableCell className="font-mono text-xs">{c.id}</TableCell>
+                                        <TableCell>{c.name}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={c.status === 'active' ? 'default' : 'secondary'}>
+                                                {c.status || '—'}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-sm">
+                                            {c.last_login ? new Date(c.last_login).toLocaleString() : '—'}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
                 </CardContent>
             </Card>
 
-            <div className="grid md:grid-cols-2 gap-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Configure POS Settings</CardTitle>
-                        <CardDescription>Define payment methods, currency, and receipt formats.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label>Accept Credit Cards</Label>
-                            <Switch defaultChecked />
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <Label>Accept Crypto</Label>
-                            <Switch />
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <Label>Accept Digital Wallets</Label>
-                            <Switch defaultChecked />
-                        </div>
-                        <Button className="w-full mt-2" onClick={() => handleAction('Saving POS settings')}>Save Settings</Button>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Licensing & Locations</CardTitle>
-                        <CardDescription>Manage licenses and branch registrations.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="licensingKey">Add POS Licensing Key</Label>
-                            <Input id="licensingKey" placeholder="Enter key..." />
-                        </div>
-                        <Button className="w-full" onClick={() => handleAction('Adding licensing key')}><KeyRound className="mr-2 h-4 w-4" /> Add Key</Button>
-                        <Button variant="secondary" className="w-full" onClick={() => handleAction('Registering a new branch')}><MapPin className="mr-2 h-4 w-4" /> Register New Branch</Button>
-                    </CardContent>
-                </Card>
-            </div>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Add more terminals</CardTitle>
+                    <CardDescription>
+                        Create additional cashier accounts via the Crypto POS admin API.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground space-y-2">
+                    <p>
+                        Authenticate to <code className="rounded bg-muted px-1 py-0.5 text-xs">/api/admin</code>, then call{' '}
+                        <code className="rounded bg-muted px-1 py-0.5 text-xs">POST /api/admin/pos/cashiers</code> with body{' '}
+                        <code className="rounded bg-muted px-1 py-0.5 text-xs">companyId</code>,{' '}
+                        <code className="rounded bg-muted px-1 py-0.5 text-xs">name</code>,{' '}
+                        <code className="rounded bg-muted px-1 py-0.5 text-xs">password</code>.
+                        See <code className="rounded bg-muted px-1 py-0.5 text-xs">CLIENT_POS_RUNBOOK.md</code> in the repo.
+                    </p>
+                </CardContent>
+            </Card>
         </div>
     );
 };

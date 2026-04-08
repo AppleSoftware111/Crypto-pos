@@ -305,5 +305,26 @@ router.post('/sync-default-credentials', requireAuth, (req, res) => {
     }
 });
 
+/**
+ * Create a POS cashier (terminal) for a company
+ * POST /api/admin/pos/cashiers
+ * Body: { companyId, name, password }
+ */
+router.post('/pos/cashiers', requireAuth, (req, res) => {
+    try {
+        const { companyId, name, password } = req.body;
+        if (!companyId || !name || !password) {
+            return res.status(400).json({ error: 'companyId, name, and password are required' });
+        }
+        const db = getDatabase();
+        const cashier = db.createCashier(companyId, name, password);
+        db.logAdminAction(req.session.adminId, 'CREATE_CASHIER', { cashierId: cashier.id, companyId }, req.ip);
+        res.status(201).json({ success: true, cashier });
+    } catch (error) {
+        console.error('Create cashier error:', error);
+        res.status(400).json({ error: error.message || 'Failed to create cashier' });
+    }
+});
+
 module.exports = router;
 

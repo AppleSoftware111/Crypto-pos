@@ -51,6 +51,33 @@ const verifyCashierToken = (req, res, next) => {
     next();
 };
 
+/** Company or cashier token — for read-only endpoints (e.g. transaction list) so merchant owner does not need a separate cashier session. */
+const verifyCompanyOrCashier = (req, res, next) => {
+    const cashierToken = req.headers['x-cashier-token'];
+    const companyToken = req.headers['x-company-token'];
+
+    if (cashierToken) {
+        const tokenData = activeTokens.get(cashierToken);
+        if (tokenData && tokenData.type === 'cashier') {
+            req.companyId = tokenData.companyId;
+            req.cashierId = tokenData.cashierId;
+            req.posAuthScope = 'cashier';
+            return next();
+        }
+    }
+
+    if (companyToken) {
+        const tokenData = activeTokens.get(companyToken);
+        if (tokenData && tokenData.type === 'company') {
+            req.companyId = tokenData.companyId;
+            req.posAuthScope = 'company';
+            return next();
+        }
+    }
+
+    return res.status(401).json({ error: 'Valid company or cashier token required' });
+};
+
 /**
  * Company Login
  * POST /api/pos/company/login
@@ -263,14 +290,15 @@ router.post('/logout', (req, res) => {
  * Transaction history (recent payments)
  * GET /api/pos/transactions
  * Query: limit (default 50), offset (default 0)
- * Headers: X-Company-Token, X-Cashier-Token
+ * Headers: X-Company-Token and/or X-Cashier-Token (either valid token is accepted)
  */
-router.get('/transactions', verifyCashierToken, (req, res) => {
+router.get('/transactions', verifyCompanyOrCashier, (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
         const offset = parseInt(req.query.offset, 10) || 0;
         const db = getDatabase();
-        const payments = db.getPayments(limit, offset, {});
+        const filters = req.companyId ? { companyId: req.companyId } : {};
+        const payments = db.getPayments(limit, offset, filters);
 
         res.json({
             success: true,
@@ -281,5 +309,26 @@ router.get('/transactions', verifyCashierToken, (req, res) => {
         res.status(500).json({ error: 'Failed to fetch transactions' });
     }
 });
+
+/** Optional POS session from headers (for payment create on same server). Not a route handler. */
+function tryGetCompanyIdFromRequest(req) {
+    const cashierToken = req.headers['x-cashier-token'];
+    const companyToken = req.headers['x-company-token'];
+    if (cashierToken) {
+        const tokenData = activeTokens.get(cashierToken);
+        if (tokenData && tokenData.type === 'cashier') {
+            return { companyId: tokenData.companyId, cashierId: tokenData.cashierId };
+        }
+    }
+    if (companyToken) {
+        const tokenData = activeTokens.get(companyToken);
+        if (tokenData && tokenData.type === 'company') {
+            return { companyId: tokenData.companyId, cashierId: null };
+        }
+    }
+    return null;
+}
+
+router.tryGetCompanyIdFromRequest = tryGetCompanyIdFromRequest;
 
 module.exports = router;

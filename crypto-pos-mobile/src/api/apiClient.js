@@ -40,6 +40,11 @@ apiClient.interceptors.request.use(
       }
     }
 
+    const origin = String(config.baseURL || apiClient.defaults.baseURL || '');
+    if (origin.includes('ngrok')) {
+      config.headers['ngrok-skip-browser-warning'] = 'true';
+    }
+
     // Logging (development only)
     if (__DEV__) {
       console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`);
@@ -101,7 +106,13 @@ apiClient.interceptors.response.use(
  */
 export const setApiBaseURL = (url) => {
   if (url && typeof url === 'string') {
-    apiClient.defaults.baseURL = url.replace(/\/+$/, '');
+    const normalized = url.replace(/\/+$/, '');
+    apiClient.defaults.baseURL = normalized;
+    if (String(normalized).includes('ngrok')) {
+      apiClient.defaults.headers.common['ngrok-skip-browser-warning'] = 'true';
+    } else {
+      delete apiClient.defaults.headers.common['ngrok-skip-browser-warning'];
+    }
     if (__DEV__) console.log('[API] Base URL set to', apiClient.defaults.baseURL);
   }
 };

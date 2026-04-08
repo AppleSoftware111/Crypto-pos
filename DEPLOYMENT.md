@@ -31,3 +31,7 @@ Typical setup: Omara SPA on **Vercel** (`https://your-app.vercel.app`) and the E
 4. **Cross-site admin cookies** — If you use Crypto POS admin login from the SPA on another origin, follow the `SESSION_CROSS_SITE` / `AUTH_COOKIE_CROSS_SITE` notes in [`.env.example`](./.env.example).
 
 5. **Wagmi / RPC (browser CORS)** — The Omara app sets explicit JSON-RPC URLs in [`wagmi.js`](./Omarapay_APP_V3.1_312026%20(1)/src/wagmi.js) so the SPA does not rely on viem defaults that may point at hosts blocking `https://omara-frontend.vercel.app`. Optional per-chain overrides: `VITE_RPC_MAINNET`, `VITE_RPC_POLYGON`, etc. (see Omarapay [`.env.example`](./Omarapay_APP_V3.1_312026%20(1)/.env.example)).
+
+## Client runbook (Android + URL alignment)
+
+For **physical Android devices**, `EXPO_PUBLIC_API_BASE_URL`, emulator vs device loopback, and keeping Vercel + mobile on the **same** API URL, see **[CLIENT_POS_RUNBOOK.md](./CLIENT_POS_RUNBOOK.md)**.

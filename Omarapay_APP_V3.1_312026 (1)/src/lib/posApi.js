@@ -1,5 +1,8 @@
 import axios from 'axios';
 import { getPOSApiBaseUrl } from '@/config/posConfig';
+import { hydratePosTokensFromStorage } from '@/lib/posSessionStorage';
+
+hydratePosTokensFromStorage();
 
 const baseURL = getPOSApiBaseUrl();
 const defaultHeaders = { 'Content-Type': 'application/json' };

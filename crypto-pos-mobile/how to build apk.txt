@@ -1,0 +1,5 @@
+cd "D:\Work\Cryptop pos\crypto pos\crypto-pos-mobile"
+npm run build:apk:local
+
+
+powershell -ExecutionPolicy Bypass -File .\scripts\build-apk-local.ps1

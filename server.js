@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const QRCode = require('qrcode');
 const path = require('path');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
@@ -10,6 +9,8 @@ const { getDatabase } = require('./database');
 const adminRoutes = require('./routes/admin');
 const adminUsersRoutes = require('./routes/adminUsers');
 const authRoutes = require('./routes/auth');
+const userPosRoutes = require('./routes/userPos');
+const posRoutes = require('./routes/pos');
 const { requireAuthHTML } = require('./middleware/auth');
 require('dotenv').config();
 
@@ -80,10 +81,7 @@ const apiLimiter = rateLimit({
     legacyHeaders: false,
     skip: (req) => {
         const url = req.originalUrl || req.url || '';
-        return (
-            url.includes('/api/payment/status') ||
-            url.includes('/api/qrcode')
-        );
+        return url.includes('/api/payment/status');
     },
 });
 app.use('/api/', apiLimiter);
@@ -248,6 +246,7 @@ app.post('/api/payment/create', async (req, res) => {
         const paymentId = `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
         // Store payment in database
+        const posSession = posRoutes.tryGetCompanyIdFromRequest(req);
         const paymentData = {
             id: paymentId,
             paymentId,
@@ -261,6 +260,8 @@ app.post('/api/payment/create', async (req, res) => {
             securityCode: securityCode || null,
             usdAmount: usdAmount || null,
             rate: rate ? JSON.stringify(rate) : null,
+            company_id: posSession?.companyId ?? null,
+            cashier_id: posSession?.cashierId ?? null,
         };
 
         db.createPayment(paymentData);
@@ -343,6 +344,7 @@ app.post('/api/card/payment/create', async (req, res) => {
         const paymentId = `card_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
         const authCode = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
         const createdAt = new Date().toISOString();
+        const posSessionCard = posRoutes.tryGetCompanyIdFromRequest(req);
 
         // Persist to DB so admin/payment history includes non-crypto methods too.
         db.createPayment({
@@ -354,6 +356,8 @@ app.post('/api/card/payment/create', async (req, res) => {
             address: null,
             status: 'confirmed',
             confirmed: true,
+            company_id: posSessionCard?.companyId ?? null,
+            cashier_id: posSessionCard?.cashierId ?? null,
         });
         db.updatePayment(paymentId, {
             confirmed_at: createdAt,
@@ -447,6 +451,8 @@ app.post('/api/qr/payment/create', async (req, res) => {
             createdAt,
         });
 
+        const posSessionQr = posRoutes.tryGetCompanyIdFromRequest(req);
+
         // Persist to DB so admin/payment history includes non-crypto methods too.
         db.createPayment({
             id: paymentId,
@@ -458,6 +464,8 @@ app.post('/api/qr/payment/create', async (req, res) => {
             status: 'confirmed',
             confirmed: true,
             phoneNumber: phoneNumber || null,
+            company_id: posSessionQr?.companyId ?? null,
+            cashier_id: posSessionQr?.cashierId ?? null,
         });
         db.updatePayment(paymentId, {
             confirmed_at: createdAt,
@@ -857,25 +865,26 @@ function generateQRData(method, address, amount) {
     return address;
 }
 
-// Generate QR code image (local PNG — no external HTTP dependency)
+// Generate QR code image (server-side fallback)
 app.get('/api/qrcode/:data', async (req, res) => {
     try {
         const { data } = req.params;
         const decodedData = decodeURIComponent(data);
-        if (!decodedData || decodedData.length > 4096) {
-            return res.status(400).json({ error: 'Invalid QR payload' });
-        }
-        const buffer = await QRCode.toBuffer(decodedData, {
-            type: 'png',
-            width: 300,
-            margin: 2,
-            errorCorrectionLevel: 'M',
+        // Use a QR code API service as fallback (free, no key required)
+        const encodedData = encodeURIComponent(decodedData);
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodedData}`;
+
+        // Proxy the QR code image
+        const response = await axios.get(qrUrl, {
+            responseType: 'arraybuffer',
+            timeout: 10000
         });
+
         res.set({
             'Content-Type': 'image/png',
-            'Cache-Control': 'public, max-age=3600',
+            'Cache-Control': 'public, max-age=3600'
         });
-        res.send(buffer);
+        res.send(response.data);
     } catch (error) {
         console.error('QR code generation error:', error);
         res.status(500).json({ error: 'Failed to generate QR code' });
@@ -1094,8 +1103,10 @@ app.use('/api/admin', adminRoutes);
 // User auth API routes
 app.use('/api/auth', authRoutes);
 
+// User-scoped POS link + transactions (JWT)
+app.use('/api/user', userPosRoutes);
+
 // POS API routes
-const posRoutes = require('./routes/pos');
 app.use('/api/pos', posRoutes);
 
 // Admin pages

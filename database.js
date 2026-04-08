@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 
 class DatabaseManager {
@@ -70,6 +71,7 @@ class DatabaseManager {
         if (!this.data.cashiers) this.data.cashiers = [];
         if (!this.data.users) this.data.users = [];
         if (!this.data.refresh_tokens) this.data.refresh_tokens = [];
+        if (!this.data.user_pos_links) this.data.user_pos_links = [];
 
         // Initialize default admin if no users exist
         if (this.data.admin_users.length === 0) {
@@ -102,7 +104,8 @@ class DatabaseManager {
                 companies: [],
                 cashiers: [],
                 users: [],
-                refresh_tokens: []
+                refresh_tokens: [],
+                user_pos_links: [],
             };
         }
         return this.data;
@@ -371,7 +374,9 @@ class DatabaseManager {
             confirmed: paymentData.confirmed ? 1 : 0,
             tx_hash: null,
             created_at: new Date().toISOString(),
-            confirmed_at: null
+            confirmed_at: null,
+            company_id: paymentData.company_id || null,
+            cashier_id: paymentData.cashier_id || null,
         };
 
         data.payments.push(payment);
@@ -431,6 +436,13 @@ class DatabaseManager {
 
         if (filters.endDate) {
             payments = payments.filter(p => p.created_at <= filters.endDate);
+        }
+
+        if (filters.companyId) {
+            const cid = filters.companyId;
+            payments = payments.filter(
+                (p) => !p.company_id || p.company_id === cid
+            );
         }
 
         // Sort by created_at descending
@@ -659,6 +671,40 @@ class DatabaseManager {
         return data.companies.find(c => c.id === companyId) || null;
     }
 
+    /** Link Omarapay user id to POS company for JWT-scoped POS reads */
+    getUserPosLink(userId) {
+        const data = this.readData();
+        const links = data.user_pos_links || [];
+        return links.find((l) => l.user_id === userId) || null;
+    }
+
+    upsertUserPosLink(userId, companyId) {
+        const data = this.readData();
+        if (!data.user_pos_links) data.user_pos_links = [];
+        const idx = data.user_pos_links.findIndex((l) => l.user_id === userId);
+        const row = {
+            user_id: userId,
+            company_id: companyId,
+            created_at: new Date().toISOString(),
+        };
+        if (idx >= 0) data.user_pos_links[idx] = row;
+        else data.user_pos_links.push(row);
+        this.writeData(data);
+        return row;
+    }
+
+    deleteUserPosLink(userId) {
+        const data = this.readData();
+        if (!data.user_pos_links) return false;
+        const before = data.user_pos_links.length;
+        data.user_pos_links = data.user_pos_links.filter((l) => l.user_id !== userId);
+        if (data.user_pos_links.length < before) {
+            this.writeData(data);
+            return true;
+        }
+        return false;
+    }
+
     // Cashier methods
     getCashiersByCompany(companyId) {
         const data = this.readData();
@@ -668,6 +714,41 @@ class DatabaseManager {
     getCashierById(cashierId) {
         const data = this.readData();
         return data.cashiers.find(c => c.id === cashierId) || null;
+    }
+
+    /**
+     * Create a cashier (terminal) for a company. Used by admin API.
+     * @returns {{ id: string, name: string, company_id: string, status: string, created_at: string }}
+     */
+    createCashier(companyId, name, plainPassword) {
+        const data = this.readData();
+        const company = data.companies.find(c => c.id === companyId);
+        if (!company) {
+            throw new Error('Company not found');
+        }
+        const trimmedName = String(name || '').trim();
+        if (!trimmedName || !plainPassword || String(plainPassword).length < 4) {
+            throw new Error('Name and password (min 4 characters) are required');
+        }
+        const id = `cashier_${crypto.randomBytes(8).toString('hex')}`;
+        const cashier = {
+            id,
+            company_id: companyId,
+            name: trimmedName,
+            password_hash: bcrypt.hashSync(String(plainPassword), 10),
+            status: 'active',
+            created_at: new Date().toISOString(),
+            last_login: null
+        };
+        data.cashiers.push(cashier);
+        this.writeData(data);
+        return {
+            id: cashier.id,
+            name: cashier.name,
+            company_id: cashier.company_id,
+            status: cashier.status,
+            created_at: cashier.created_at
+        };
     }
 
     authenticateCashier(companyId, cashierId, password) {

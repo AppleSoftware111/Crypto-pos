@@ -3,6 +3,8 @@
  * Points to the Crypto POS backend (same as mobile app).
  */
 const POS_API_BASE_URL = import.meta.env.VITE_POS_API_BASE_URL || 'http://localhost:4000';
+/** Default POS company id for single-tenant UAT (matches Crypto POS seed `company_1`). Used for UI hints only. */
+export const POS_DEFAULT_COMPANY_ID = import.meta.env.VITE_POS_DEFAULT_COMPANY_ID || 'company_1';
 /** Set to 'false' to hide POS in merchant (business) area. POS is business-account only. */
 export const POS_ENABLED = import.meta.env.VITE_SHOW_POS !== 'false';
 
@@ -14,4 +16,4 @@ export const POS_CLIENT_MODULES_ENABLED = import.meta.env.VITE_POS_CLIENT_MODULE
 
 export const getPOSApiBaseUrl = () => POS_API_BASE_URL;
 
-export default { getPOSApiBaseUrl, POS_API_BASE_URL, POS_ENABLED, POS_CLIENT_MODULES_ENABLED };
+export default { getPOSApiBaseUrl, POS_API_BASE_URL, POS_DEFAULT_COMPANY_ID, POS_ENABLED, POS_CLIENT_MODULES_ENABLED };

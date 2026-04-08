@@ -21,14 +21,27 @@ export const USE_OMARAPAY_API = false; // Set to true when ready to use Omarapay
 
 // API Base URLs
 // Priority:
-// 1) EXPO_PUBLIC_API_BASE_URL (manual override)
-// 2) Android emulator default
-// 3) Previous LAN fallback for non-Android local testing
+// 1) EXPO_PUBLIC_API_BASE_URL (required for EAS preview/production; must match Vercel VITE_POS_API_BASE_URL origin)
+// 2) __DEV__ only: emulator/simulator loopback (physical devices must set EXPO_PUBLIC_ or in-app Server URL)
 const DEFAULT_ANDROID_EMULATOR_API = 'http://10.0.2.2:4000';
-const DEFAULT_LAN_API = 'http://192.168.139.90:4000';
+const DEFAULT_IOS_SIMULATOR_API = 'http://127.0.0.1:4000';
 
-export const LOCAL_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ||
-  (Platform.OS === 'android' ? DEFAULT_ANDROID_EMULATOR_API : DEFAULT_LAN_API);
+function resolveLocalApiBaseUrl() {
+  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '');
+  }
+  if (__DEV__) {
+    return Platform.OS === 'android' ? DEFAULT_ANDROID_EMULATOR_API : DEFAULT_IOS_SIMULATOR_API;
+  }
+  // Release build without baked URL — warn; physical Android cannot use 10.0.2.2
+  console.warn(
+    '[Crypto POS] EXPO_PUBLIC_API_BASE_URL was not set at build time. Set it in EAS env or use Server URL on the login screen.'
+  );
+  return Platform.OS === 'android' ? DEFAULT_ANDROID_EMULATOR_API : DEFAULT_IOS_SIMULATOR_API;
+}
+
+export const LOCAL_API_BASE_URL = resolveLocalApiBaseUrl();
 export const OMARAPAY_API_BASE_URL = 'https://app.omarapay.com/api'; // Omarapay API (update when provided)
 
 // Get current API base URL

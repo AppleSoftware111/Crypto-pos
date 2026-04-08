@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import MerchantSidebar from './MerchantSidebar';
 import ModeToggle from './ModeToggle';
 import ModeBanner from './ModeBanner';
+import PosSessionBanner from './PosSessionBanner';
+import ConnectPosModal from './ConnectPosModal';
 import DemoWalkthrough from '@/components/demo/DemoWalkthrough';
 import {
     DropdownMenu,
@@ -25,12 +27,13 @@ const MerchantLayout = () => {
         businessProfile, 
         loading: businessLoading,
     } = useBusiness();
-    const { isModeDemo } = useMerchant();
+    const { isModeDemo, isModeLive, needsPosSessionBanner, refreshData } = useMerchant();
     
     const navigate = useNavigate();
     const location = useLocation();
     const [searchParams] = useSearchParams();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [connectPosOpen, setConnectPosOpen] = useState(false);
 
     const kioskOnPos =
         location.pathname === '/merchant/pos' && searchParams.get('kiosk') === '1';
@@ -184,6 +187,18 @@ const MerchantLayout = () => {
 
                 {/* Mode Banner with Walkthrough Trigger */}
                 <ModeBanner onStartWalkthrough={handleStartWalkthrough} />
+
+                {isModeLive() && needsPosSessionBanner && (
+                    <PosSessionBanner
+                        onConnect={() => setConnectPosOpen(true)}
+                    />
+                )}
+
+                <ConnectPosModal
+                    open={connectPosOpen}
+                    onOpenChange={setConnectPosOpen}
+                    onConnected={() => refreshData()}
+                />
 
                 {/* Main Content */}
                 <main className="flex-1 p-6 overflow-x-hidden">

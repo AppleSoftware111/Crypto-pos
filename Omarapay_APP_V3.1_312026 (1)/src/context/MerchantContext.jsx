@@ -4,6 +4,8 @@ import { useBusiness } from './BusinessContext';
 import { useToast } from '@/components/ui/use-toast';
 import SwitchModeModal from '@/components/merchant/SwitchModeModal';
 import { getTransactions as fetchPOSTransactions } from '@/lib/posApi';
+import { fetchUserPosTransactions } from '@/lib/userPosApi';
+import { getAccessToken } from '@/lib/authApi';
 import { 
     demoTransactions, 
     demoPayouts, 
@@ -43,6 +45,8 @@ export const MerchantProvider = ({ children }) => {
     // Data State
     const [loading, setLoading] = useState(true);
     const [liveTransactionsError, setLiveTransactionsError] = useState(null);
+    /** How live data was loaded: user JWT link, POS tokens, or not at all */
+    const [livePosDataSource, setLivePosDataSource] = useState(null);
     const [realData, setRealData] = useState({
         transactions: [],
         payouts: [],
@@ -96,10 +100,30 @@ export const MerchantProvider = ({ children }) => {
             chartData: []
         };
         try {
-            const res = await fetchPOSTransactions(50, 0, abortSignal);
-            const payments = res?.transactions || [];
+            let payments = [];
+            let source = null;
+
+            const token = getAccessToken();
+            if (token) {
+                try {
+                    const userRes = await fetchUserPosTransactions(50, 0, abortSignal);
+                    payments = userRes?.transactions || [];
+                    source = 'user';
+                } catch (userErr) {
+                    if (userErr?.name === 'AbortError' || userErr?.code === 'ERR_CANCELED') return;
+                    // 403 = not linked yet; 401 = bad session — fall back to POS tokens
+                }
+            }
+
+            if (source === null) {
+                const posRes = await fetchPOSTransactions(50, 0, abortSignal);
+                payments = posRes?.transactions || [];
+                source = 'pos';
+            }
+
             const mapped = Array.isArray(payments) ? payments.map(mapPaymentToTransaction) : [];
             const totalAmount = mapped.filter(t => t.status === 'Completed').reduce((sum, t) => sum + t.amount, 0);
+            setLivePosDataSource(source);
             setRealData({
                 transactions: mapped,
                 payouts: [],
@@ -112,14 +136,23 @@ export const MerchantProvider = ({ children }) => {
                     revenue: { total: totalAmount, trend: 0 }
                 }
             });
+            setLiveTransactionsError(null);
         } catch (err) {
             if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED') return;
+            setLivePosDataSource(null);
             setRealData(prev => ({
                 ...prev,
                 transactions: [],
                 analytics: prev.analytics || defaultAnalytics
             }));
-            setLiveTransactionsError(err?.response?.status === 401 ? 'Sign in to POS to see live transactions here.' : 'Could not load transactions.');
+            const st = err?.response?.status;
+            if (st === 401) {
+                setLiveTransactionsError('Live POS data needs a POS session (Connect POS or cashier login) or a linked Omarapay account.');
+            } else if (st === 403) {
+                setLiveTransactionsError('Link your POS company under Connect POS, or sign in on the cashier terminal.');
+            } else {
+                setLiveTransactionsError('Could not load transactions. Check the POS API URL and your connection.');
+            }
         } finally {
             setLoading(false);
         }
@@ -134,6 +167,7 @@ export const MerchantProvider = ({ children }) => {
         } else {
             setLoading(false);
             setLiveTransactionsError(null);
+            setLivePosDataSource(null);
         }
     }, [businessProfile, mode, loadLiveData]);
 
@@ -188,6 +222,11 @@ export const MerchantProvider = ({ children }) => {
         }
     }, [mode, businessProfile, loadLiveData]);
 
+    const needsPosSessionBanner = useMemo(() => {
+        if (mode !== 'live' || loading) return false;
+        return livePosDataSource === null && Boolean(liveTransactionsError);
+    }, [mode, loading, livePosDataSource, liveTransactionsError]);
+
     const value = useMemo(() => ({
         ...currentData,
         loading,
@@ -199,8 +238,10 @@ export const MerchantProvider = ({ children }) => {
         addTransaction,
         addPayout,
         refreshData,
-        liveTransactionsError
-    }), [currentData, loading, mode, isModeLive, isModeDemo, switchToLiveMode, switchToDemoMode, addTransaction, addPayout, refreshData, liveTransactionsError]);
+        liveTransactionsError,
+        livePosDataSource,
+        needsPosSessionBanner
+    }), [currentData, loading, mode, isModeLive, isModeDemo, switchToLiveMode, switchToDemoMode, addTransaction, addPayout, refreshData, liveTransactionsError, livePosDataSource, needsPosSessionBanner]);
 
     return (
         <MerchantContext.Provider value={value}>

@@ -33,8 +33,13 @@ const SwitchModeModal = ({ open, onOpenChange, onConfirm }) => {
                         <AlertTriangle className="h-6 w-6" />
                         <DialogTitle className="text-xl">Switch to Live Account</DialogTitle>
                     </div>
-                    <DialogDescription>
-                        You are about to switch to Live Mode. Transactions performed in Live Mode involve real money and cannot be undone.
+                    <DialogDescription className="space-y-2">
+                        <span className="block">
+                            You are about to switch to Live Mode. Transactions performed in Live Mode involve real money and cannot be undone.
+                        </span>
+                        <span className="block text-muted-foreground text-sm">
+                            Live merchant analytics read from the Crypto POS API. You need a POS session (cashier login or Connect POS with your company password) or a one-time link from your Omarapay account—wallet login alone does not replace POS authentication.
+                        </span>
                     </DialogDescription>
                 </DialogHeader>
                 
