@@ -41,7 +41,7 @@ const ALLOWED_ROLES = new Set(['user', 'admin']);
 
 router.use(requireAuth);
 
-router.get('/users', (req, res) => {
+router.get('/', (req, res) => {
     try {
         const db = getDatabase();
         const { search, role, provider, status, limit, offset } = req.query;
@@ -65,7 +65,7 @@ router.get('/users', (req, res) => {
     }
 });
 
-router.get('/users/:id', (req, res) => {
+router.get('/:id', (req, res) => {
     try {
         const db = getDatabase();
         const user = db.getUserById(req.params.id);
@@ -79,7 +79,7 @@ router.get('/users/:id', (req, res) => {
     }
 });
 
-router.post('/users', (req, res) => {
+router.post('/', (req, res) => {
     try {
         const db = getDatabase();
         const email = normalizeEmail(req.body?.email);
@@ -123,7 +123,7 @@ router.post('/users', (req, res) => {
     }
 });
 
-router.patch('/users/:id', (req, res) => {
+router.patch('/:id', (req, res) => {
     try {
         const db = getDatabase();
         const user = db.getUserById(req.params.id);
@@ -190,7 +190,7 @@ router.patch('/users/:id', (req, res) => {
     }
 });
 
-router.delete('/users/:id', (req, res) => {
+router.delete('/:id', (req, res) => {
     try {
         const db = getDatabase();
         const user = db.getUserById(req.params.id);

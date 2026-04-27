@@ -318,11 +318,61 @@ router.post('/pos/cashiers', requireAuth, (req, res) => {
         }
         const db = getDatabase();
         const cashier = db.createCashier(companyId, name, password);
-        db.logAdminAction(req.session.adminId, 'CREATE_CASHIER', { cashierId: cashier.id, companyId }, req.ip);
+        const adminId = req.session && req.session.adminId;
+        if (adminId) {
+            db.logAdminAction(adminId, 'CREATE_CASHIER', { cashierId: cashier.id, companyId }, req.ip);
+        }
         res.status(201).json({ success: true, cashier });
     } catch (error) {
         console.error('Create cashier error:', error);
         res.status(400).json({ error: error.message || 'Failed to create cashier' });
+    }
+});
+
+/** List POS companies (safe fields only). */
+router.get('/pos/companies', requireAuth, (req, res) => {
+    try {
+        const db = getDatabase();
+        res.json({ companies: db.listCompaniesForAdmin() });
+    } catch (error) {
+        console.error('List POS companies error:', error);
+        res.status(500).json({ error: 'Failed to list companies' });
+    }
+});
+
+/** List cashiers for a company (safe fields only). */
+router.get('/pos/companies/:companyId/cashiers', requireAuth, (req, res) => {
+    try {
+        const db = getDatabase();
+        const { companyId } = req.params;
+        if (!db.getCompanyById(companyId)) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        res.json({ cashiers: db.listCashiersForAdmin(companyId) });
+    } catch (error) {
+        console.error('List cashiers error:', error);
+        res.status(500).json({ error: 'Failed to list cashiers' });
+    }
+});
+
+/** Update per-method settlement (receive) addresses for POS crypto payments. */
+router.patch('/pos/companies/:companyId/settlements', requireAuth, (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { settlement_addresses } = req.body;
+        const db = getDatabase();
+        const updated = db.updateCompanySettlementAddresses(companyId, settlement_addresses);
+        if (!updated) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        const adminId = req.session && req.session.adminId;
+        if (adminId) {
+            db.logAdminAction(adminId, 'UPDATE_COMPANY_SETTLEMENTS', { companyId }, req.ip);
+        }
+        res.json({ success: true, company: updated });
+    } catch (error) {
+        console.error('Update settlements error:', error);
+        res.status(500).json({ error: 'Failed to update settlements' });
     }
 });
 

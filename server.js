@@ -236,9 +236,24 @@ app.post('/api/payment/create', async (req, res) => {
             return res.status(400).json({ error: 'Payment method not available or disabled' });
         }
 
-        if (!coin.wallet_address) {
+        const posSession = posRoutes.tryGetCompanyIdFromRequest(req);
+        const methodKey = String(coin.method_code || coin.method || '').toLowerCase();
+        let receiveAddress = coin.wallet_address;
+        if (posSession?.companyId) {
+            const co = db.getCompanyById(posSession.companyId);
+            const overrides = co?.settlement_addresses && typeof co.settlement_addresses === 'object' ? co.settlement_addresses : {};
+            const ov =
+                overrides[methodKey] ||
+                overrides[coin.method_code] ||
+                overrides[String(coin.method_code || '').toLowerCase()];
+            if (ov && String(ov).trim()) {
+                receiveAddress = String(ov).trim();
+            }
+        }
+
+        if (!receiveAddress) {
             return res.status(500).json({
-                error: `Wallet address not configured for ${coin.name}. Please configure in admin panel.`
+                error: `Wallet address not configured for ${coin.name}. Please configure in admin panel or company settlement overrides.`
             });
         }
 
@@ -246,14 +261,13 @@ app.post('/api/payment/create', async (req, res) => {
         const paymentId = `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
         // Store payment in database
-        const posSession = posRoutes.tryGetCompanyIdFromRequest(req);
         const paymentData = {
             id: paymentId,
             paymentId,
             coinId: coin.id,
             method: coin.method_code,
             amount: parseFloat(amount),
-            address: coin.wallet_address,
+            address: receiveAddress,
             status: 'pending',
             confirmed: false,
             phoneNumber: phoneNumber || null,
@@ -281,10 +295,10 @@ app.post('/api/payment/create', async (req, res) => {
 
         const responsePayload = {
             paymentId,
-            address: coin.wallet_address,
+            address: receiveAddress,
             amount: paymentData.amount,
             method: coin.method_code,
-            qrData: generateQRData(coin.method_code, coin.wallet_address, amount)
+            qrData: generateQRData(coin.method_code, receiveAddress, amount)
         };
 
         storeIdempotentResponse(req, 200, responsePayload);
@@ -1096,8 +1110,10 @@ app.get('/api/receipt/:paymentId', async (req, res) => {
     }
 });
 
-// Admin API routes (user CRUD must be registered before legacy admin router)
-app.use('/api/admin', adminUsersRoutes);
+// Admin API routes
+// - Session-based admin endpoints (login, coins, payments, etc): /api/admin/*
+// - User CRUD is mounted under /api/admin/users/* to avoid intercepting /api/admin/login
+app.use('/api/admin/users', adminUsersRoutes);
 app.use('/api/admin', adminRoutes);
 
 // User auth API routes

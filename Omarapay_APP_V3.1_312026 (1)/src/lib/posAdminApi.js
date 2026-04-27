@@ -46,6 +46,9 @@ export const togglePOSCoin = (id, enabled) =>
 export const getPOSAdminPayments = (params = {}) =>
   adminClient.get('/api/admin/payments', { params }).then((r) => r.data.payments || []);
 
+export const getPOSAdminStats = () =>
+  adminClient.get('/api/admin/stats').then((r) => r.data);
+
 /** Receipt is public API (no admin auth required) */
 export const getPOSReceipt = (paymentId) =>
   adminClient.get(`/api/receipt/${paymentId}`).then((r) => r.data);
@@ -89,4 +92,23 @@ export const getCryptoPOSAdminAuthStatus = () =>
 export const logoutCryptoPOSAdmin = () =>
   adminClient.post('/api/admin/logout').then((r) => r.data);
 
-export default adminClient;
+// POS companies & terminals (Super Admin)
+export const getAdminPOSCompanies = () =>
+  adminClient.get('/api/admin/pos/companies').then((r) => r.data.companies || []);
+
+export const getAdminPOSCashiers = (companyId) =>
+  adminClient
+    .get(`/api/admin/pos/companies/${encodeURIComponent(companyId)}/cashiers`)
+    .then((r) => r.data.cashiers || []);
+
+export const createAdminPOSCashier = (companyId, name, password) =>
+  adminClient
+    .post('/api/admin/pos/cashiers', { companyId, name, password })
+    .then((r) => r.data);
+
+export const patchCompanySettlementAddresses = (companyId, settlement_addresses) =>
+  adminClient
+    .patch(`/api/admin/pos/companies/${encodeURIComponent(companyId)}/settlements`, {
+      settlement_addresses,
+    })
+    .then((r) => r.data.company);

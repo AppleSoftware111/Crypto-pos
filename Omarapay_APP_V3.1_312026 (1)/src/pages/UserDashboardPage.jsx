@@ -4,7 +4,7 @@ import { useUsers } from '@/context/UserContext';
 import { useBusiness } from '@/context/BusinessContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Lock, Building2, PlusCircle, ArrowRight, Fingerprint, Wallet } from 'lucide-react';
+import { Lock, Building2, PlusCircle, ArrowRight, Fingerprint, Wallet, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -107,6 +107,24 @@ const UserDashboardPage = ({ defaultTab = 'overview' }) => {
              </CardContent>
          </Card>
       </div>
+
+      <Card className="mb-8 border-blue-100 bg-blue-50/70 dark:bg-blue-950/20 dark:border-blue-900">
+        <CardContent className="p-4 flex items-start gap-3">
+          <div className="p-2 bg-white dark:bg-slate-900 rounded-full border shadow-sm">
+            <Receipt className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-blue-950 dark:text-blue-100">
+              Wallet ledger and POS sales ledger are connected, but separate
+            </p>
+            <p className="text-sm text-blue-900/80 dark:text-blue-200/80 mt-1">
+              This wallet area shows personal/account wallet activity. POS sales are recorded in the Crypto POS backend and
+              appear under Merchant Live and Super Admin POS Payments when POS is connected. POS receive wallets can be
+              configured separately from the main wallet for settlement.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
         <div className="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">

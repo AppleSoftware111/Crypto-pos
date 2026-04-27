@@ -13,9 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { getPOSAdminPayments, getPOSReceipt, isPOSAdminConfigured } from '@/lib/posAdminApi';
+import { getPOSAdminPayments, getPOSAdminStats, getPOSReceipt, isPOSAdminConfigured } from '@/lib/posAdminApi';
 import { getPOSApiBaseUrl } from '@/config/posConfig';
-import { Receipt, RefreshCw, Loader2, AlertCircle, FileText } from 'lucide-react';
+import { Receipt, RefreshCw, Loader2, AlertCircle, FileText, DollarSign, CheckCircle2, Clock3 } from 'lucide-react';
 
 export default function AdminPOSPaymentsPage() {
   const baseUrl = getPOSApiBaseUrl();
@@ -34,6 +34,7 @@ export default function AdminPOSPaymentsPage() {
   const [receiptData, setReceiptData] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptId, setReceiptId] = useState(null);
+  const [stats, setStats] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,8 +45,12 @@ export default function AdminPOSPaymentsPage() {
       if (filters.method) params.method = filters.method;
       if (filters.startDate) params.startDate = filters.startDate;
       if (filters.endDate) params.endDate = filters.endDate + 'T23:59:59.999Z';
-      const data = await getPOSAdminPayments(params);
+      const [data, statData] = await Promise.all([
+        getPOSAdminPayments(params),
+        getPOSAdminStats().catch(() => null),
+      ]);
       setPayments(Array.isArray(data) ? data : []);
+      setStats(statData?.payments || null);
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to load POS payments');
     } finally {
@@ -74,6 +79,18 @@ export default function AdminPOSPaymentsPage() {
 
   const configured = isPOSAdminConfigured();
   const list = Array.isArray(payments) ? payments : [];
+  const loadedConfirmed = list.filter((p) => p.confirmed === 1 || p.confirmed === true || p.status === 'confirmed');
+  const loadedTotalAmount = loadedConfirmed.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const summary = {
+    total: stats?.total ?? list.length,
+    confirmed: stats?.confirmed ?? loadedConfirmed.length,
+    pending: stats?.pending ?? Math.max(list.length - loadedConfirmed.length, 0),
+    totalAmount: stats?.totalAmount ?? loadedTotalAmount,
+  };
+  const formatAmount = (amount) => {
+    const n = Number(amount);
+    return Number.isFinite(n) ? `$${n.toFixed(2)}` : '—';
+  };
 
   if (!configured) {
     return (
@@ -92,6 +109,45 @@ export default function AdminPOSPaymentsPage() {
 
   return (
     <StandardPageWrapper title="POS Payments" subtitle="Crypto POS — payment history and receipts">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <Receipt className="h-5 w-5 text-blue-600" />
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Total payments</p>
+              <p className="text-2xl font-bold">{summary.total}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Confirmed</p>
+              <p className="text-2xl font-bold">{summary.confirmed}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <Clock3 className="h-5 w-5 text-amber-600" />
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Pending</p>
+              <p className="text-2xl font-bold">{summary.pending}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <DollarSign className="h-5 w-5 text-green-600" />
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Confirmed sales</p>
+              <p className="text-2xl font-bold">{formatAmount(summary.totalAmount)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -99,7 +155,7 @@ export default function AdminPOSPaymentsPage() {
               <Receipt className="h-5 w-5" /> Payment history
             </CardTitle>
             <CardDescription>
-              View and filter payments. Click &quot;Receipt&quot; to see full receipt data.
+              Real backend POS payments from /api/admin/payments. Click &quot;Receipt&quot; to inspect a sale.
             </CardDescription>
           </div>
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -205,7 +261,9 @@ export default function AdminPOSPaymentsPage() {
             </Table>
           )}
           {!loading && list.length === 0 && !error && (
-            <p className="text-center text-muted-foreground py-8">No payments yet.</p>
+            <p className="text-center text-muted-foreground py-8">
+              No live POS payments found on this backend yet. Create a POS payment from web or Android, then refresh.
+            </p>
           )}
         </CardContent>
       </Card>

@@ -29,7 +29,7 @@ const AccountSetupPage = () => {
             description: 'Add your physical POS terminals.',
             isComplete: false, 
             icon: <HardDrive className="h-6 w-6 text-primary mr-4" />,
-            link: '/dashboard/pos-management',
+            link: '/merchant/pos-management',
             buttonText: 'Go to POS Mgmt'
         },
         {
@@ -37,7 +37,7 @@ const AccountSetupPage = () => {
             description: 'Activate your terminals with a license key.',
             isComplete: false,
             icon: <KeyRound className="h-6 w-6 text-primary mr-4" />,
-            link: '/dashboard/pos-management',
+            link: '/merchant/pos-management',
             buttonText: 'Go to POS Mgmt'
         },
         {
@@ -45,7 +45,7 @@ const AccountSetupPage = () => {
             description: 'Register new branches for your business.',
             isComplete: false,
             icon: <MapPin className="h-6 w-6 text-primary mr-4" />,
-            link: '/dashboard/pos-management',
+            link: '/merchant/pos-management',
             buttonText: 'Go to POS Mgmt'
         },
     ];

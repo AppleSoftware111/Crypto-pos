@@ -36,6 +36,7 @@ import InvoicesPage from '@/pages/merchant/InvoicesPage';
 import ProductsPage from '@/pages/merchant/ProductsPage';
 import AnalyticsPage from '@/pages/merchant/AnalyticsPage';
 import DocumentUploadPage from '@/pages/merchant/DocumentUploadPage';
+import PosManagementPage from '@/pages/merchant/PosManagementPage';
 
 // Admin Pages
 import AdminDashboard from '@/pages/admin/AdminDashboard';
@@ -46,7 +47,8 @@ import AdminTransactionsPage from '@/pages/admin/AdminTransactionsPage';
 import AdminBusinessApprovalPage from '@/pages/admin/AdminBusinessApprovalPage'; 
 import AdminPaymentProvidersPage from '@/pages/admin/AdminPaymentProvidersPage';
 import AdminPOSCoinsPage from '@/pages/admin/AdminPOSCoinsPage';
-import AdminPOSPaymentsPage from '@/pages/admin/AdminPOSPaymentsPage'; 
+import AdminPOSPaymentsPage from '@/pages/admin/AdminPOSPaymentsPage';
+import AdminPOSManagementPage from '@/pages/admin/AdminPOSManagementPage';
 import AdminBalanceControlPage from '@/pages/admin/balance/AdminBalanceControlPage';
 import AdminDepositManagementPage from '@/pages/admin/balance/AdminDepositManagementPage';
 import AdminWithdrawalMonitoringPage from '@/pages/admin/balance/AdminWithdrawalMonitoringPage';
@@ -124,6 +126,7 @@ function App() {
             <Route path="/business/register" element={<BusinessRegistrationPage />} />
 
             {/* --- User Wallet Routes --- */}
+            <Route path="/dashboard/pos-management" element={<Navigate to="/merchant/pos-management" replace />} />
             <Route path="/dashboard" element={<Navigate to="/wallet" replace />} />
             
             <Route element={<UserWalletWrapper />}>
@@ -143,6 +146,7 @@ function App() {
                 <Route path="/merchant/pos" element={<POSFlowPage />} />
                 <Route path="/merchant/cashier" element={<POSFlowPage />} />
                 <Route path="/merchant/pos-settings" element={<BusinessPOSCoinsPage />} />
+                <Route path="/merchant/pos-management" element={<PosManagementPage />} />
                 <Route path="/merchant/transactions" element={<TransactionsPage />} />
                 <Route path="/merchant/payouts" element={<PayoutsPage />} />
                 <Route path="/merchant/reports" element={<ReportsPage />} />
@@ -173,6 +177,7 @@ function App() {
                 <Route path="/admin/roles" element={<AdminRolesPage />} />
                 <Route path="/admin/approvals" element={<AdminBusinessApprovalPage />} />
                 <Route path="/admin/payment-providers" element={<AdminPaymentProvidersPage />} />
+                <Route path="/admin/pos-management" element={<AdminPOSManagementPage />} />
                 <Route path="/admin/pos-coins" element={<AdminPOSCoinsPage />} />
                 <Route path="/admin/pos-payments" element={<AdminPOSPaymentsPage />} />
             </Route>

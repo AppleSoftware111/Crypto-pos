@@ -9,9 +9,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Download, Search, Filter, RefreshCw } from 'lucide-react';
 
 const TransactionsPage = () => {
-    const { transactions, loading, isModeDemo, isModeLive, refreshData, liveTransactionsError } = useMerchant();
+    const {
+        transactions,
+        loading,
+        isModeDemo,
+        isModeLive,
+        refreshData,
+        liveTransactionsError,
+        livePosDataSource,
+    } = useMerchant();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
+
+    const liveSourceLabel = (() => {
+        if (!isModeLive()) return 'Demo dataset';
+        if (livePosDataSource === 'user') return 'User-linked POS';
+        if (livePosDataSource === 'pos') return 'POS token session';
+        return 'POS not connected';
+    })();
+
+    const liveSourceDescription = (() => {
+        if (!isModeLive()) return 'Demo transactions are sample data for walkthroughs.';
+        if (livePosDataSource === 'user') return 'Live payments are loaded with the Omarapay account link.';
+        if (livePosDataSource === 'pos') return 'Live payments are loaded with the current POS company/cashier session.';
+        return 'Connect POS or sign in to the cashier terminal to load real POS payments.';
+    })();
 
     const filteredTransactions = transactions.filter(txn => {
         const matchesSearch = txn.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -27,9 +49,15 @@ const TransactionsPage = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-3xl font-bold tracking-tight">Transactions</h2>
-                    <p className="text-muted-foreground">
-                        {isModeDemo() ? "Viewing Demo Transactions" : "Viewing Live Transactions"}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-muted-foreground">
+                            {isModeDemo() ? "Viewing Demo Transactions" : "Viewing Live Transactions"}
+                        </p>
+                        <Badge variant={isModeLive() && livePosDataSource ? 'default' : 'secondary'}>
+                            {liveSourceLabel}
+                        </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{liveSourceDescription}</p>
                 </div>
                 <div className="flex gap-2">
                     {isModeLive() && (

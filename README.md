@@ -27,7 +27,7 @@ A production-ready Point of Sale system for accepting cryptocurrency payments. S
 
 ## Prerequisites
 
-- Node.js 14.0.0 or higher
+- Node.js 18.0.0 or higher (required for `better-sqlite3` prebuilt binaries)
 - npm or yarn
 - Bitcoin wallet address
 - Avalanche wallet address (for USDT)
@@ -40,6 +40,8 @@ A production-ready Point of Sale system for accepting cryptocurrency payments. S
 ```bash
 npm install
 ```
+
+   Persistence is **SQLite** by default (`data/crypto-pos.db`; override with `SQLITE_PATH` in `.env`). To migrate an older `data.json`, see [`DEPLOYMENT.md`](./DEPLOYMENT.md) and `scripts/import-json-to-sqlite.js`.
 
 3. **Configure environment variables**:
 ```bash

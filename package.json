@@ -20,6 +20,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "better-sqlite3": "^11.7.0",
     "axios": "^1.6.0",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
@@ -33,6 +34,6 @@
     "qrcode": "^1.5.4"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }

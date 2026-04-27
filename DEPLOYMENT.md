@@ -18,6 +18,7 @@ Do **not** treat the duplicate [`src/`](./src/) tree at the repository root as t
 - **Stack:** Express (`package.json` name: `crypto-pos`)
 - **Commands:** `npm install && npm start` (default port from `.env`, often `4000`)
 - **Role:** POS REST API, company/cashier auth, admin session endpoints consumed by the Vite app via `VITE_POS_API_BASE_URL`.
+- **Storage:** Durable data lives in **SQLite** (via `better-sqlite3`). Default file: `data/crypto-pos.db` (override with `SQLITE_PATH` in `.env`). Mount a persistent volume on Docker/VPS for the directory containing that file so the DB and its `-wal`/`-shm` sidecars survive restarts. **Migrating from `data.json`:** run the importer against the target DB **before** the first `npm start`, or use `--force` to replace rows that were auto-created on a blank database. Flow: `node scripts/import-json-to-sqlite.js --dry-run`, then `node scripts/import-json-to-sqlite.js --backup --confirm` (add `--force` only when wiping an existing SQLite file). Serverless deployments continue to use an **in-memory** SQLite database (no durable file).
 
 Point the SPA at the API with `VITE_POS_API_BASE_URL` in the Omarapay app’s `.env` (see [`ADMIN_SETUP.md`](./ADMIN_SETUP.md) for Super Admin env vars).
 

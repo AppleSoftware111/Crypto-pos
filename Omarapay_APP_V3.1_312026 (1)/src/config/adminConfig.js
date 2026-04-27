@@ -13,7 +13,8 @@ import {
   Coins,
   Receipt,
   Users,
-  Shield
+  Shield,
+  TabletSmartphone
 } from 'lucide-react';
 
 // ==============================================================================
@@ -86,6 +87,7 @@ export const adminMenuStructure = [
   {
     title: 'Crypto POS',
     items: [
+      { name: 'POS Management', path: '/admin/pos-management', icon: TabletSmartphone },
       { name: 'POS Coins', path: '/admin/pos-coins', icon: Coins },
       { name: 'POS Payments', path: '/admin/pos-payments', icon: Receipt },
     ]
