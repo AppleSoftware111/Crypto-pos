@@ -20,9 +20,14 @@ import {
   tokenPocketWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 
-/** Reown (WalletConnect Cloud). Add your Vercel origin at https://cloud.reown.com for this project. */
+/**
+ * Reown (WalletConnect Cloud).
+ * IMPORTANT: A valid project id must be provided via VITE_WALLETCONNECT_PROJECT_ID.
+ * If it is missing, WalletConnect is disabled so the app doesn't crash in dev/prod.
+ */
+const projectIdRaw = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 const projectId =
-  import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || 'a80c99f8d4de8e4268e0a133f009f001';
+  typeof projectIdRaw === 'string' && projectIdRaw.trim() ? projectIdRaw.trim() : null;
 
 // Detect if user is on mobile device
 const isMobile = () => {
@@ -32,19 +37,27 @@ const isMobile = () => {
 
 // Configure wallet connectors based on device type
 const getWalletConnectors = () => {
+  const walletConnectEnabled = Boolean(projectId);
+  // If projectId is missing, ONLY include injected wallets.
+  // Many RainbowKit wallets rely on WalletConnect internally and will throw otherwise.
+  if (!walletConnectEnabled) {
+    return [metaMaskWallet, coinbaseWallet];
+  }
+  const wc = [walletConnectWallet];
+
   const mobileWallets = [
     coreWallet,
     tokenPocketWallet,
     trustWallet,
     metaMaskWallet,
-    walletConnectWallet,
+    ...wc,
   ];
 
   const desktopWallets = [
     metaMaskWallet,
     coreWallet,
     trustWallet,
-    walletConnectWallet,
+    ...wc,
     coinbaseWallet,
     rainbowWallet,
     safeWallet,
@@ -63,7 +76,7 @@ const connectors = connectorsForWallets(
   ],
   {
     appName: 'Omarapay_wallet',
-    projectId: projectId,
+    ...(projectId ? { projectId } : {}),
   }
 );
 
